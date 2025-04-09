@@ -1,0 +1,772 @@
+import React, { useEffect, useState } from "react";
+import axios from "axios";
+import { Card, Row, Col, Badge, Button } from "antd";
+import { LineChart, Line, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, Legend } from "recharts";
+import { FaChartBar, FaCalendarDay, FaCalendarMinus, FaPauseCircle, FaCheckCircle, FaSun, FaMoon, FaTruck } from "react-icons/fa";
+import moment from "moment";
+import { Triangle } from "react-loader-spinner";
+import Cookies from "js-cookie";
+import { useNavigate } from "react-router-dom";
+import config from "../config";
+
+const DashboardPage = () => {
+  const [orderCounts, setOrderCounts] = useState({
+    today: 0,
+    yesterday: 0,
+    total: 0,
+    onHold: 0,
+    completed: 0,
+  });
+  const [orders, setOrders] = useState([]);
+  const [dailyOrders, setDailyOrders] = useState([]);
+  const [todayCourierCounts, setTodayCourierCounts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+  const [packedPersons, setPackedPersons] = useState([]);
+  const [theme, setTheme] = useState("light");
+
+  useEffect(() => {
+    const token = Cookies.get("token");
+    const userName = Cookies.get("userName");
+
+    if (!token || !userName) {
+      navigate("/");
+      return;
+    }
+
+    const fetchOrders = async () => {
+      try {
+        const response = await axios.get(`${config.apiBaseUrl}/all-orders`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const orders = response.data.orders || [];
+
+        const today = moment().startOf("day");
+        const yesterday = moment().subtract(1, "days").startOf("day");
+
+        const counts = orders.reduce(
+          (acc, order) => {
+            const orderDate = moment(order.order_date);
+            if (orderDate.isSame(today, "day")) acc.today += 1;
+            else if (orderDate.isSame(yesterday, "day")) acc.yesterday += 1;
+            if (order.packed_status === "Hold") acc.onHold += 1;
+            if (order.packed_status === "Completed") acc.completed += 1;
+            acc.total += 1;
+            return acc;
+          },
+          { today: 0, yesterday: 0, total: 0, onHold: 0, completed: 0 }
+        );
+
+        setOrderCounts(counts);
+        setOrders(orders);
+
+        const dailyCounts = [];
+        for (let i = 6; i >= 0; i--) {
+          const day = moment().subtract(i, "days").startOf("day");
+          const count = orders.filter((order) => moment(order.order_date).isSame(day, "day")).length;
+          dailyCounts.push({ day: day.format("MMM"), count });
+        }
+        setDailyOrders(dailyCounts);
+
+        const packedData = orders.reduce((acc, order) => {
+          const personName = (order.packed_person_name?.trim() === "Unknown" || !order.packed_person_name?.trim())
+            ? "Pending Orders"
+            : order.packed_person_name.trim();
+          acc[personName] = (acc[personName] || 0) + 1;
+          return acc;
+        }, {});
+
+        const packedPersonsArray = Object.entries(packedData).map(([name, count]) => ({ name, count }));
+        setPackedPersons(packedPersonsArray);
+
+        const todayOrders = orders.filter((order) => moment(order.order_date).isSame(today, "day"));
+        const courierData = todayOrders.reduce((acc, order) => {
+          if (order.shipments && order.shipments.length > 0) {
+            const uniqueCouriers = [...new Set(order.shipments.map((shipment) => shipment.courier_name?.trim()).filter(Boolean))];
+            uniqueCouriers.forEach((courier) => {
+              acc[courier] = (acc[courier] || 0) + 1;
+            });
+          }
+          return acc;
+        }, {});
+
+        const todayCourierCountsArray = Object.entries(courierData)
+          .map(([name, count]) => ({ name, count }))
+          .sort((a, b) => b.count - a.count);
+        setTodayCourierCounts(todayCourierCountsArray);
+      } catch (error) {
+        console.error("Failed to fetch orders", error);
+        if (error.response?.status === 401) {
+          Cookies.remove("token");
+          Cookies.remove("userName");
+          Cookies.remove("userDetails");
+          navigate("/");
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchOrders();
+  }, [navigate]);
+
+  const percentageChange = (current, reference) => {
+    if (reference === 0) return "+0%";
+    const change = ((current - reference) / reference) * 100;
+    return `${change > 0 ? "+" : ""}${change.toFixed(1)}%`;
+  };
+
+  const pieData = [
+    { name: "Completed", value: orders.filter((order) => order.packed_status === "Completed").length },
+    { name: "On Hold", value: orders.filter((order) => order.packed_status === "Hold").length },
+    { name: "Pending", value: orders.filter((order) => order.packed_status === "Pending").length },
+  ];
+
+  const COLORS = ["#22C55E", "#A855F7", "#FF6B6B"];
+
+  const themes = {
+    dark: {
+      background: "#1B254B",
+      cardBackground: "#252D5A",
+      textPrimary: "#FFFFFF",
+      textSecondary: "#A0AEC0",
+      borderColor: "#4A5568",
+      buttonBackground: "#1B254B",
+      chartAxisColor: "#A0AEC0",
+      tooltipBackground: "#1B254B",
+    },
+    light: {
+      background: "#F7FAFC",
+      cardBackground: "#FFFFFF",
+      textPrimary: "#1A202C",
+      textSecondary: "#718096",
+      borderColor: "#E2E8F0",
+      buttonBackground: "#EDF2F7",
+      chartAxisColor: "#718096",
+      tooltipBackground: "#FFFFFF",
+    },
+  };
+
+  const currentTheme = themes[theme];
+
+  const toggleTheme = () => {
+    setTheme(theme === "dark" ? "light" : "dark");
+  };
+
+  if (loading) {
+    return (
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh", background: currentTheme.background }}>
+        <Triangle visible={true} height="80" width="80" color="#22B8CF" ariaLabel="triangle-loading" />
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ background: currentTheme.background, minHeight: "100vh", padding: "30px 15px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
+        <div>
+          <h1 style={{ fontSize: "28px", fontWeight: "bold", color: currentTheme.textPrimary, marginBottom: "4px" }}>
+            Dashboard
+          </h1>
+          <p style={{ fontSize: "14px", color: currentTheme.textSecondary, marginBottom: "0" }}>
+            Welcome back, {Cookies.get("userName")}!
+          </p>
+        </div>
+        <Button
+          onClick={toggleTheme}
+          style={{
+            background: currentTheme.buttonBackground,
+            border: "none",
+            borderRadius: "8px",
+            padding: "8px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          {theme === "dark" ? (
+            <FaSun size={20} color={currentTheme.textSecondary} />
+          ) : (
+            <FaMoon size={20} color={currentTheme.textSecondary} />
+          )}
+        </Button>
+      </div>
+
+      {/* Stat Cards */}
+      <Row gutter={[16, 16]} style={{ marginBottom: "24px" }}>
+        <Col xs={24} sm={12} md={6}>
+          <Card
+            style={{
+              background: currentTheme.cardBackground,
+              borderRadius: "15px",
+              border: "none",
+              padding: "15px",
+              color: currentTheme.textPrimary,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+              <FaCalendarDay size={20} color="#22B8CF" />
+              <Badge
+                color="#22B8CF"
+                text="Today"
+                style={{ color: currentTheme.textSecondary, fontSize: "10px", fontWeight: "500" }}
+              />
+            </div>
+            <h3 style={{ fontSize: "14px", color: currentTheme.textSecondary, marginBottom: "4px" }}>Today Orders</h3>
+            <p style={{ fontSize: "24px", fontWeight: "bold", color: currentTheme.textPrimary, marginBottom: "4px" }}>
+              {orderCounts.today}
+            </p>
+            <p style={{ fontSize: "12px", color: orderCounts.today >= orderCounts.yesterday ? "#22C55E" : "#FF6B6B" }}>
+              {percentageChange(orderCounts.today, orderCounts.yesterday)} since yesterday
+            </p>
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} md={6}>
+          <Card
+            style={{
+              background: currentTheme.cardBackground,
+              borderRadius: "15px",
+              border: "none",
+              padding: "15px",
+              color: currentTheme.textPrimary,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+              <FaCalendarMinus size={20} color="#FF6B6B" />
+              <Badge
+                color="#FF6B6B"
+                text="Yesterday"
+                style={{ color: currentTheme.textSecondary, fontSize: "10px", fontWeight: "500" }}
+              />
+            </div>
+            <h3 style={{ fontSize: "14px", color: currentTheme.textSecondary, marginBottom: "4px" }}>Yesterday Orders</h3>
+            <p style={{ fontSize: "24px", fontWeight: "bold", color: currentTheme.textPrimary, marginBottom: "4px" }}>
+              {orderCounts.yesterday}
+            </p>
+            <p style={{ fontSize: "12px", color: orderCounts.yesterday >= orderCounts.today ? "#22C55E" : "#FF6B6B" }}>
+              {percentageChange(orderCounts.yesterday, orderCounts.today)} compared to today
+            </p>
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} md={6}>
+          <Card
+            style={{
+              background: currentTheme.cardBackground,
+              borderRadius: "15px",
+              border: "none",
+              padding: "15px",
+              color: currentTheme.textPrimary,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+              <FaPauseCircle size={20} color="#A855F7" />
+              <Badge
+                color="#A855F7"
+                text="On Hold"
+                style={{ color: currentTheme.textSecondary, fontSize: "10px", fontWeight: "500" }}
+              />
+            </div>
+            <h3 style={{ fontSize: "14px", color: currentTheme.textSecondary, marginBottom: "4px" }}>Orders on Hold</h3>
+            <p style={{ fontSize: "24px", fontWeight: "bold", color: currentTheme.textPrimary, marginBottom: "4px" }}>
+              {orderCounts.onHold}
+            </p>
+            <p style={{ fontSize: "12px", color: "#FF6B6B" }}>
+              {percentageChange(orderCounts.onHold, orderCounts.total)} of total orders
+            </p>
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} md={6}>
+          <Card
+            style={{
+              background: currentTheme.cardBackground,
+              borderRadius: "15px",
+              border: "none",
+              padding: "15px",
+              color: currentTheme.textPrimary,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+              <FaCheckCircle size={20} color="#22C55E" />
+              <Badge
+                color="#22C55E"
+                text="Completed"
+                style={{ color: currentTheme.textSecondary, fontSize: "10px", fontWeight: "500" }}
+              />
+            </div>
+            <h3 style={{ fontSize: "14px", color: currentTheme.textSecondary, marginBottom: "4px" }}>Completed Orders</h3>
+            <p style={{ fontSize: "24px", fontWeight: "bold", color: currentTheme.textPrimary, marginBottom: "4px" }}>
+              {orderCounts.completed}
+            </p>
+            <p style={{ fontSize: "12px", color: "#22C55E" }}>
+              {percentageChange(orderCounts.completed, orderCounts.total)} of total orders
+            </p>
+          </Card>
+        </Col>
+       
+      </Row>
+
+      {/* Charts and Tables */}
+      <Row gutter={[16, 16]} style={{ marginBottom: "24px" }}>
+        <Col xs={24} md={16}>
+          <Card
+            style={{
+              background: currentTheme.cardBackground,
+              borderRadius: "15px",
+              border: "none",
+              padding: "15px",
+              color: currentTheme.textPrimary,
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+              <h3 style={{ fontSize: "16px", color: currentTheme.textPrimary, fontWeight: "600" }}>Sales Value</h3>
+              <div>
+                <Button
+                  style={{
+                    background: currentTheme.buttonBackground,
+                    color: currentTheme.textSecondary,
+                    border: "none",
+                    borderRadius: "6px",
+                    padding: "4px 8px",
+                    fontSize: "12px",
+                    marginRight: "4px",
+                  }}
+                >
+                  Month
+                </Button>
+                <Button
+                  style={{
+                    background: currentTheme.buttonBackground,
+                    color: currentTheme.textSecondary,
+                    border: "none",
+                    borderRadius: "6px",
+                    padding: "4px 8px",
+                    fontSize: "12px",
+                  }}
+                >
+                  Week
+                </Button>
+              </div>
+            </div>
+            <LineChart width={500} height={250} data={dailyOrders}>
+              <XAxis dataKey="day" stroke={currentTheme.chartAxisColor} />
+              <YAxis stroke={currentTheme.chartAxisColor} />
+              <Tooltip
+                contentStyle={{
+                  background: currentTheme.tooltipBackground,
+                  border: "none",
+                  borderRadius: "6px",
+                  color: currentTheme.textPrimary,
+                }}
+              />
+              <Line type="monotone" dataKey="count" stroke="#22B8CF" strokeWidth={2} />
+            </LineChart>
+          </Card>
+        </Col>
+
+        <Col xs={24} md={8}>
+          <Card
+            style={{
+              background: currentTheme.cardBackground,
+              borderRadius: "15px",
+              border: "none",
+              padding: "15px",
+              color: currentTheme.textPrimary,
+            }}
+          >
+            <h3 style={{ fontSize: "16px", color: currentTheme.textPrimary, fontWeight: "600", marginBottom: "8px" }}>
+              Order Status
+            </h3>
+            <PieChart width={250} height={250}>
+              <Pie
+                data={pieData}
+                dataKey="value"
+                nameKey="name"
+                cx="50%"
+                cy="50%"
+                outerRadius={80}
+                fill="#8884d8"
+              >
+                {pieData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                ))}
+              </Pie>
+              <Tooltip
+                contentStyle={{
+                  background: currentTheme.tooltipBackground,
+                  border: "none",
+                  borderRadius: "6px",
+                  color: currentTheme.textPrimary,
+                }}
+              />
+              <Legend wrapperStyle={{ color: currentTheme.textSecondary, fontSize: "12px" }} />
+            </PieChart>
+          </Card>
+        </Col>
+      </Row>
+
+      <Row gutter={[16, 16]}>
+        <Col xs={24} md={12}>
+          <Card
+            style={{
+              background: currentTheme.cardBackground,
+              borderRadius: "15px",
+              border: "none",
+              padding: "15px",
+              color: currentTheme.textPrimary,
+            }}
+          >
+            <h3 style={{ fontSize: "16px", color: currentTheme.textPrimary, fontWeight: "600", marginBottom: "8px" }}>
+              Total Orders
+            </h3>
+            <BarChart width={400} height={250} data={dailyOrders}>
+              <XAxis dataKey="day" stroke={currentTheme.chartAxisColor} />
+              <YAxis stroke={currentTheme.chartAxisColor} />
+              <Tooltip
+                contentStyle={{
+                  background: currentTheme.tooltipBackground,
+                  border: "none",
+                  borderRadius: "6px",
+                  color: currentTheme.textPrimary,
+                }}
+              />
+              <Bar dataKey="count" fill="#FF6B6B" />
+            </BarChart>
+          </Card>
+        </Col>
+
+        <Col xs={24} md={12}>
+          <Card
+            style={{
+              background: currentTheme.cardBackground,
+              borderRadius: "15px",
+              border: "none",
+              padding: "15px",
+              color: currentTheme.textPrimary,
+            }}
+          >
+            <h3 style={{ fontSize: "16px", color: currentTheme.textPrimary, fontWeight: "600", marginBottom: "8px" }}>
+              Users
+            </h3>
+            <ul style={{ listStyleType: "none", padding: 0 }}>
+              {packedPersons.map((person) => (
+                <li
+                  key={person.name}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    padding: "8px 0",
+                    borderBottom: `1px solid ${currentTheme.borderColor}`,
+                  }}
+                >
+                  <span style={{ fontSize: "14px", color: currentTheme.textSecondary }}>{person.name}</span>
+                  <span style={{ fontSize: "14px", fontWeight: "bold", color: "#22B8CF" }}>
+                    {person.count}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} md={12}>
+        <Card
+  style={{
+    background: currentTheme.cardBackground,
+    borderRadius: "15px",
+    border: "none",
+    padding: "20px",
+    color: currentTheme.textPrimary,
+    boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
+  }}
+>
+  <div
+    style={{
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: "12px",
+    }}
+  >
+    <div style={{ display: "flex", alignItems: "center" }}>
+      <FaTruck size={24} color="#FFA500" style={{ marginRight: "8px" }} />
+      <h3
+        style={{
+          fontSize: "16px",
+          fontWeight: "600",
+          color: currentTheme.textPrimary,
+          margin: 0,
+        }}
+      >
+        Today’s Orders by Courier
+      </h3>
+    </div>
+    <Badge
+      color="#FFA500"
+      text="Today"
+      style={{
+        color: currentTheme.textSecondary,
+        fontSize: "10px",
+        fontWeight: "500",
+        background: currentTheme.buttonBackground,
+        padding: "2px 6px",
+        borderRadius: "4px",
+      }}
+    />
+  </div>
+
+  <ul
+    style={{
+      listStyleType: "none",
+      padding: 0,
+      overflowY: "auto",
+      margin: 0,
+    }}
+  >
+    {todayCourierCounts.length > 0 ? (
+      todayCourierCounts.map((courier) => (
+        <li
+          key={courier.name}
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            padding: "8px 12px",
+            marginBottom: "4px",
+            background: currentTheme.cardBackground === "#FFFFFF" ? "#F9FAFB" : "#2D3748",
+            borderRadius: "8px",
+            transition: "background 0.2s ease",
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = currentTheme.cardBackground === "#FFFFFF" ? "#EDF2F7" : "#4A5568")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = currentTheme.cardBackground === "#FFFFFF" ? "#F9FAFB" : "#2D3748")}
+        >
+          <span
+            style={{
+              fontSize: "14px",
+              fontWeight: "500",
+              color: currentTheme.textPrimary,
+              flex: 1,
+            }}
+          >
+            {courier.name || "Unknown"}
+          </span>
+          <div style={{ display: "flex", alignItems: "center" }}>
+            <span
+              style={{
+                fontSize: "14px",
+                fontWeight: "bold",
+                color: "#FFA500",
+                marginRight: "8px",
+              }}
+            >
+              {courier.count}
+            </span>
+            <Badge
+              count={courier.count}
+              style={{
+                backgroundColor: "#FFA500",
+                color: "#FFF",
+                fontSize: "10px",
+                padding: "0 6px",
+                borderRadius: "10px",
+              }}
+            />
+          </div>
+        </li>
+      ))
+    ) : (
+      <li
+        style={{
+          fontSize: "14px",
+          color: currentTheme.textSecondary,
+          textAlign: "center",
+          padding: "10px 0",
+        }}
+      >
+        No courier data for today
+      </li>
+    )}
+  </ul>
+
+  {/* Total Count Footer */}
+  {todayCourierCounts.length > 0 && (
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        padding: "8px 12px",
+        marginTop: "8px",
+        borderTop: `1px solid ${currentTheme.borderColor}`,
+      }}
+    >
+      <span
+        style={{
+          fontSize: "14px",
+          fontWeight: "600",
+          color: currentTheme.textPrimary,
+        }}
+      >
+        Total
+      </span>
+      <span
+        style={{
+          fontSize: "14px",
+          fontWeight: "bold",
+          color: "#FFA500",
+        }}
+      >
+        {todayCourierCounts.reduce((sum, courier) => sum + courier.count, 0)}
+      </span>
+    </div>
+  )}
+</Card>
+        </Col>
+
+        <Col xs={24} sm={12} md={12}> 
+        <Card
+  style={{
+    background: currentTheme.cardBackground,
+    borderRadius: "15px",
+    border: "none",
+    padding: "20px",
+    color: currentTheme.textPrimary,
+    boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
+  }}
+>
+  <div
+    style={{
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: "12px",
+    }}
+  >
+    <div style={{ display: "flex", alignItems: "center" }}>
+      <FaChartBar size={24} color="#10B981" style={{ marginRight: "8px" }} /> {/* Using a chart icon */}
+      <h3
+        style={{
+          fontSize: "16px",
+          fontWeight: "600",
+          color: currentTheme.textPrimary,
+          margin: 0,
+        }}
+      >
+        Courier Analysis Insights
+      </h3>
+    </div>
+    <Badge
+      color="#10B981"
+      text="Today"
+      style={{
+        color: currentTheme.textSecondary,
+        fontSize: "10px",
+        fontWeight: "500",
+        background: currentTheme.buttonBackground,
+        padding: "2px 6px",
+        borderRadius: "4px",
+      }}
+    />
+  </div>
+
+  {/* Top Courier */}
+  {todayCourierCounts.length > 0 ? (
+    <div style={{ marginBottom: "16px" }}>
+      <span
+        style={{
+          fontSize: "14px",
+          color: currentTheme.textSecondary,
+        }}
+      >
+        Top Courier:
+      </span>
+      <span
+        style={{
+          fontSize: "14px",
+          fontWeight: "bold",
+          color: "#10B981",
+          marginLeft: "8px",
+        }}
+      >
+        {todayCourierCounts[0].name || "Unknown"} ({todayCourierCounts[0].count} orders)
+      </span>
+    </div>
+  ) : null}
+
+  {/* Mini Bar Chart */}
+  {todayCourierCounts.length > 0 ? (
+    <BarChart
+      width={220} // Compact size for the card
+      height={100}
+      data={todayCourierCounts.slice(0, 5)} // Show top 5 couriers
+      margin={{ top: 5, right: 0, left: 0, bottom: 5 }}
+    >
+      <XAxis
+        dataKey="name"
+        stroke={currentTheme.chartAxisColor}
+        tick={{ fontSize: 10, fill: currentTheme.textSecondary }}
+        interval={0} // Show all labels
+        angle={-45} // Rotate labels for readability
+        textAnchor="end"
+      />
+      <YAxis hide /> {/* Hide Y-axis for simplicity */}
+      <Tooltip
+        contentStyle={{
+          background: currentTheme.tooltipBackground,
+          border: "none",
+          borderRadius: "6px",
+          color: currentTheme.textPrimary,
+          fontSize: "12px",
+        }}
+      />
+      <Bar dataKey="count" fill="#10B981" radius={[4, 4, 0, 0]} />
+    </BarChart>
+  ) : (
+    <div
+      style={{
+        fontSize: "14px",
+        color: currentTheme.textSecondary,
+        textAlign: "center",
+        padding: "20px 0",
+      }}
+    >
+      No courier data available for analysis
+    </div>
+  )}
+
+  {/* Orders Without Shipments (Optional) */}
+  {orders && (
+    <div
+      style={{
+        marginTop: "12px",
+        padding: "8px 12px",
+        background: currentTheme.cardBackground === "#FFFFFF" ? "#FEF3F2" : "#4A5568",
+        borderRadius: "8px",
+      }}
+    >
+      <span
+        style={{
+          fontSize: "14px",
+          color: currentTheme.textSecondary,
+        }}
+      >
+        Orders without Shipments:
+      </span>
+      <span
+        style={{
+          fontSize: "14px",
+          fontWeight: "bold",
+          color: "#EF4444", // Red for attention
+          marginLeft: "8px",
+        }}
+      >
+        {orders.filter((order) => moment(order.order_date).isSame(moment().startOf("day"), "day") && (!order.shipments || order.shipments.length === 0)).length}
+      </span>
+    </div>
+  )}
+</Card>
+        </Col>
+      </Row>
+    </div>
+  );
+};
+
+export default DashboardPage;

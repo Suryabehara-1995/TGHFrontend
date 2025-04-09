@@ -1,0 +1,153 @@
+
+  
+  .settings-title {
+    color: #1a1a1a;
+    margin-bottom: 8px;
+  }
+  
+  .settings-subtitle {
+    font-size: 14px;
+    color: #8c8c8c;
+    display: block;
+    margin-bottom: 24px;
+  }
+  
+  /* Card Styling */
+  .profile-card,
+  .users-card,
+  .create-user-card {
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    border: none;
+    background-color: #fff;
+    transition: all 0.3s;
+  }
+  
+  .profile-card:hover,
+  .users-card:hover,
+  .create-user-card:hover {
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+  }
+  
+  .card-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  
+  .card-title {
+    margin: 0;
+    color: #1a1a1a;
+  }
+  
+  .card-subtitle {
+    display: block;
+    color: #8c8c8c;
+  }
+  
+  /* Avatar Styling */
+  .profile-avatar,
+  .user-avatar {
+    background-color: #fde3cf !important;
+    color: #f56a00 !important;
+  }
+  
+  /* Input and Form Styling */
+  .custom-input {
+    border-radius: 8px !important;
+    height: 48px !important;
+    font-size: 16px !important;
+  }
+  
+  .input-icon {
+    color: #8c8c8c !important;
+  }
+  
+  .custom-select {
+    width: 100%;
+    height: 48px !important;
+    font-size: 16px !important;
+  }
+  
+  .custom-select .ant-select-selector {
+    border-radius: 8px !important;
+    height: 48px !important;
+    display: flex;
+    align-items: center;
+  }
+  
+  .custom-button {
+    border-radius: 8px !important;
+    height: 48px !important;
+    background: #1890ff !important;
+    border: none !important;
+    font-size: 16px !important;
+  }
+  
+  /* Users List Styling */
+  .users-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  
+  .user-item {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px;
+    background-color: #f9f9f9;
+    border-radius: 8px;
+    transition: background-color 0.3s;
+  }
+  
+  .user-item:hover {
+    background-color: #f0f0f0;
+  }
+  
+  .user-info {
+    flex: 1;
+  }
+  
+  .user-name {
+    font-weight: 500;
+    color: #1a1a1a;
+    display: block;
+  }
+  
+  .user-role {
+    color: #8c8c8c;
+    font-size: 14px;
+  }
+  
+  .user-permissions {
+    flex: 1;
+  }
+  
+  .permission-tag {
+    background: #f0f0f0;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    margin-right: 8px;
+  }
+  
+  .edit-button {
+    color: #1890ff !important;
+  }
+  
+  /* Permissions Box Styling */
+  .permissions-box {
+    background: #ffffff;
+    padding: 16px;
+    border-radius: 8px;
+    border: 1px solid #f0f0f0;
+  }
+  
+  /* Modal Styling */
+  .modal-title {
+    font-size: 18px;
+    font-weight: 500;
+    color: #1a1a1a;
+  }
