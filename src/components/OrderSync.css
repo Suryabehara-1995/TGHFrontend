@@ -1,0 +1,111 @@
+.order-sync-container {
+    
+  background-color: #f0f2f5;
+  min-height: 100vh;
+}
+
+.order-sync-card {
+ 
+  margin: 0 auto;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  padding: 20px;
+}
+
+.date-picker-container {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.button-group {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.spinner-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 200px;
+}
+
+.order-table {
+  background: #fff;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.table-row:hover {
+  background-color: #fafafa;
+}
+
+.expanded-row {
+  padding: 16px;
+  background: #f9f9f9;
+  border-radius: 4px;
+}
+
+.expanded-row .ant-card {
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.expanded-row .ant-card .ant-card-head {
+  background: #e6f7ff;
+  border-bottom: 1px solid #d9ecff;
+}
+
+.expanded-row ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.expanded-row ul li {
+  margin-bottom: 8px;
+}
+
+.expanded-row ul li p {
+  margin: 4px 0;
+}
+
+.total-orders {
+  text-align: right;
+  font-weight: bold;
+  font-size: 16px;
+  margin-top: 16px;
+  color: #1890ff;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .order-sync-card {
+    padding: 10px;
+  }
+
+  .date-picker-container {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .button-group {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .button-group .ant-btn {
+    width: 100%;
+    max-width: 300px;
+    margin-bottom: 10px;
+  }
+}
+
+order-tabs {
+  background: #fff;
+  border-radius: 7px;
+  padding: 17px;
+}

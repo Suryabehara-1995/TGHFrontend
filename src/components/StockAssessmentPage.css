@@ -1,0 +1,78 @@
+.stock-assessment-container {
+    padding: 20px;
+    background-color: #f0f2f5;
+    min-height: 100vh;
+  }
+  
+  .stock-assessment-card {
+    max-width: 1200px;
+    margin: 0 auto;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    padding: 20px;
+  }
+  
+  .page-title {
+    font-size: 24px;
+    font-weight: bold;
+    margin-bottom: 20px;
+    text-align: center;
+    color: #1a1a1a;
+  }
+  
+  .spinner-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 200px;
+  }
+  
+  .stock-table {
+    background: #fff;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  
+  .table-row:hover {
+    background-color: #fafafa;
+  }
+  
+  .expanded-row {
+    padding: 16px;
+    background: #f9f9f9;
+    border-radius: 4px;
+  }
+  
+  .expanded-row .ant-card {
+    border-radius: 6px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  }
+  
+  .expanded-row .ant-card .ant-card-head {
+    background: #e6f7ff;
+    border-bottom: 1px solid #d9ecff;
+  }
+  
+  .total-orders {
+    font-size: 16px;
+    font-weight: bold;
+    color: #1890ff;
+  }
+  
+  @media (max-width: 768px) {
+    .stock-assessment-card {
+      padding: 10px;
+    }
+  
+    .ant-btn {
+      width: 100%;
+      margin-bottom: 10px;
+    }
+  
+    .total-orders {
+      text-align: center;
+      width: 100%;
+      margin-top: 10px;
+    }
+  }

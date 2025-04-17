@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Form, Input, Button, message, Avatar, Space, Card, Row, Col, Modal, Typography, Select, Checkbox } from 'antd';
 import { UserOutlined, MailOutlined, LockOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
+import { Triangle } from 'react-loader-spinner'; // Import the Triangle loader
 import config from '../config';
 import './SettingsPage.css';
 
@@ -12,6 +13,7 @@ const SettingsPage = ({ token, userName }) => {
   const [profile, setProfile] = useState({ name: '', email: '', role: 'Product Designer' });
   const [users, setUsers] = useState([]);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [loading, setLoading] = useState(true); // Add loading state
   const [newUser, setNewUser] = useState({
     name: '',
     email: '',
@@ -28,10 +30,11 @@ const SettingsPage = ({ token, userName }) => {
     },
   });
   const [editUser, setEditUser] = useState(null);
-  const [createModalVisible, setCreateModalVisible] = useState(false); // Modal for creating user
+  const [createModalVisible, setCreateModalVisible] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
 
   useEffect(() => {
+    setLoading(true); // Set loading to true when fetching starts
     axios.get(`${config.apiBaseUrl}/profile`, {
       headers: { Authorization: `Bearer ${token}` }
     })
@@ -42,6 +45,11 @@ const SettingsPage = ({ token, userName }) => {
       .catch((err) => {
         console.error('Failed to fetch profile:', err.response?.data || err.message);
         message.error('Failed to fetch profile');
+      })
+      .finally(() => {
+        if (!isAdmin) {
+          setLoading(false); // Stop loading if not admin
+        }
       });
 
     if (isAdmin) {
@@ -54,6 +62,9 @@ const SettingsPage = ({ token, userName }) => {
         .catch((err) => {
           console.error('Failed to fetch users:', err.response?.data || err.message);
           message.error('Failed to fetch users');
+        })
+        .finally(() => {
+          setLoading(false); // Stop loading after fetching users
         });
     }
   }, [token, isAdmin]);
@@ -97,7 +108,7 @@ const SettingsPage = ({ token, userName }) => {
             settingsAccess: false,
           },
         });
-        setCreateModalVisible(false); // Close modal after successful creation
+        setCreateModalVisible(false);
       })
       .catch((err) => {
         const errorMessage = err.response?.data?.message || 'Failed to create user';
@@ -128,25 +139,32 @@ const SettingsPage = ({ token, userName }) => {
       });
   };
 
-
-  // Add this function to handle user deletion
-const handleDeleteUser = (userId) => {
-  axios.delete(`${config.apiBaseUrl}/admin/users/${userId}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
-    .then(() => {
-      message.success('User deleted successfully');
-      setUsers(users.filter(user => user._id !== userId)); // Remove user from state
+  const handleDeleteUser = (userId) => {
+    axios.delete(`${config.apiBaseUrl}/admin/users/${userId}`, {
+      headers: { Authorization: `Bearer ${token}` },
     })
-    .catch((err) => {
-      const errorMessage = err.response?.data?.message || 'Failed to delete user';
-      console.error('Failed to delete user:', err.response?.data || err.message);
-      message.error(errorMessage);
-    });
-};
+      .then(() => {
+        message.success('User deleted successfully');
+        setUsers(users.filter(user => user._id !== userId));
+      })
+      .catch((err) => {
+        const errorMessage = err.response?.data?.message || 'Failed to delete user';
+        console.error('Failed to delete user:', err.response?.data || err.message);
+        message.error(errorMessage);
+      });
+  };
+
+  // Render loading screen if loading is true
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', background: '#f0f2f medya5' }}>
+        <Triangle visible={true} height="80" width="80" color="#22B8CF" ariaLabel="triangle-loading" />
+      </div>
+    );
+  }
 
   return (
-    <div style={ {padding :'15px'}} className="settings-container">
+    <div style={{ padding: '15px' }} className="settings-container">
       <Title level={2} className="settings-title">
         Settings
       </Title>
@@ -155,7 +173,7 @@ const handleDeleteUser = (userId) => {
       <Row gutter={[24, 24]}>
         {/* Profile Settings Section */}
         <Col xs={24} lg={12}>
-          <Card className="profile-card" style={{ background: 'linear-gradient(135deg, #4B5EAA, #8F94FB)', height:"160px" }}>
+          <Card className="profile-card" style={{ background: 'linear-gradient(135deg, #4B5EAA, #8F94FB)', height: '160px' }}>
             <div className="card-header" style={{ display: 'flex', alignItems: 'center', padding: '16px' }}>
               <Avatar
                 size={80}
@@ -225,42 +243,42 @@ const handleDeleteUser = (userId) => {
                 </Button>
               </div>
               <div className="users-list">
-  {users.map((user, index) => (
-    <div key={index} className="user-item">
-      <Avatar
-        size={48}
-        icon={<UserOutlined />}
-        className="user-avatar"
-      />
-      <div className="user-info">
-        <Text className="user-name">{user.name}</Text>
-        <Text className="user-role">{user.role}</Text>
-      </div>
-      <Button
-        type="link"
-        icon={<EditOutlined />}
-        onClick={() => handleEditUser(user)}
-        className="edit-button"
-      >
-        Edit
-      </Button>
-      <Button
-        type="link"
-        danger
-        onClick={() => handleDeleteUser(user._id)} // Call the delete function
-        className="delete-button"
-      >
-        Delete
-      </Button>
-    </div>
-  ))}
-</div>
+                {users.map((user, index) => (
+                  <div key={index} className="user-item">
+                    <Avatar
+                      size={48}
+                      icon={<UserOutlined />}
+                      className="user-avatar"
+                    />
+                    <div className="user-info">
+                      <Text className="user-name">{user.name}</Text>
+                      <Text className="user-role">{user.role}</Text>
+                    </div>
+                    <Button
+                      type="link"
+                      icon={<EditOutlined />}
+                      onClick={() => handleEditUser(user)}
+                      className="edit-button"
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      type="link"
+                      danger
+                      onClick={() => handleDeleteUser(user._id)}
+                      className="delete-button"
+                    >
+                      Delete
+                    </Button>
+                  </div>
+                ))}
+              </div>
             </Card>
           </Col>
         )}
       </Row>
 
-      {/* Edit User Modal (unchanged) */}
+      {/* Edit User Modal */}
       <Modal
         title={<span className="modal-title">Edit User</span>}
         open={editModalVisible}

@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { Card, Row, Col, Badge, Button } from "antd";
-import { LineChart, Line, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, Legend } from "recharts";
+import { LineChart, Line, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, LabelList } from "recharts";
 import { FaChartBar, FaCalendarDay, FaCalendarMinus, FaPauseCircle, FaCheckCircle, FaSun, FaMoon, FaTruck } from "react-icons/fa";
 import moment from "moment";
 import { Triangle } from "react-loader-spinner";
 import Cookies from "js-cookie";
 import { useNavigate } from "react-router-dom";
+import { io } from "socket.io-client";
 import config from "../config";
 
 const DashboardPage = () => {
@@ -40,60 +41,7 @@ const DashboardPage = () => {
           headers: { Authorization: `Bearer ${token}` },
         });
         const orders = response.data.orders || [];
-
-        const today = moment().startOf("day");
-        const yesterday = moment().subtract(1, "days").startOf("day");
-
-        const counts = orders.reduce(
-          (acc, order) => {
-            const orderDate = moment(order.order_date);
-            if (orderDate.isSame(today, "day")) acc.today += 1;
-            else if (orderDate.isSame(yesterday, "day")) acc.yesterday += 1;
-            if (order.packed_status === "Hold") acc.onHold += 1;
-            if (order.packed_status === "Completed") acc.completed += 1;
-            acc.total += 1;
-            return acc;
-          },
-          { today: 0, yesterday: 0, total: 0, onHold: 0, completed: 0 }
-        );
-
-        setOrderCounts(counts);
-        setOrders(orders);
-
-        const dailyCounts = [];
-        for (let i = 6; i >= 0; i--) {
-          const day = moment().subtract(i, "days").startOf("day");
-          const count = orders.filter((order) => moment(order.order_date).isSame(day, "day")).length;
-          dailyCounts.push({ day: day.format("MMM"), count });
-        }
-        setDailyOrders(dailyCounts);
-
-        const packedData = orders.reduce((acc, order) => {
-          const personName = (order.packed_person_name?.trim() === "Unknown" || !order.packed_person_name?.trim())
-            ? "Pending Orders"
-            : order.packed_person_name.trim();
-          acc[personName] = (acc[personName] || 0) + 1;
-          return acc;
-        }, {});
-
-        const packedPersonsArray = Object.entries(packedData).map(([name, count]) => ({ name, count }));
-        setPackedPersons(packedPersonsArray);
-
-        const todayOrders = orders.filter((order) => moment(order.order_date).isSame(today, "day"));
-        const courierData = todayOrders.reduce((acc, order) => {
-          if (order.shipments && order.shipments.length > 0) {
-            const uniqueCouriers = [...new Set(order.shipments.map((shipment) => shipment.courier_name?.trim()).filter(Boolean))];
-            uniqueCouriers.forEach((courier) => {
-              acc[courier] = (acc[courier] || 0) + 1;
-            });
-          }
-          return acc;
-        }, {});
-
-        const todayCourierCountsArray = Object.entries(courierData)
-          .map(([name, count]) => ({ name, count }))
-          .sort((a, b) => b.count - a.count);
-        setTodayCourierCounts(todayCourierCountsArray);
+        updateOrderData(orders);
       } catch (error) {
         console.error("Failed to fetch orders", error);
         if (error.response?.status === 401) {
@@ -108,7 +56,82 @@ const DashboardPage = () => {
     };
 
     fetchOrders();
+
+    const socket = io(config.websocketUrl);
+
+    socket.on("orderUpdated", (updatedOrder) => {
+      setOrders((prevOrders) => {
+        const updatedOrders = prevOrders.map((order) =>
+          order.id === updatedOrder.id ? updatedOrder : order
+        );
+        updateOrderData(updatedOrders);
+        return updatedOrders;
+      });
+    });
+
+    return () => {
+      socket.disconnect();
+    };
   }, [navigate]);
+
+  const updateOrderData = (orders) => {
+    const today = moment().startOf("day");
+    const yesterday = moment().subtract(1, "days").startOf("day");
+
+    const counts = orders.reduce(
+      (acc, order) => {
+        const orderDate = moment(order.order_date);
+        if (orderDate.isSame(today, "day")) acc.today += 1;
+        else if (orderDate.isSame(yesterday, "day")) acc.yesterday += 1;
+        if (order.packed_status === "Hold") acc.onHold += 1;
+        if (order.packed_status === "Completed") acc.completed += 1;
+        acc.total += 1;
+        return acc;
+      },
+      { today: 0, yesterday: 0, total: 0, onHold: 0, completed: 0 }
+    );
+
+    setOrderCounts(counts);
+    setOrders(orders);
+
+    const dailyCounts = [];
+    for (let i = 6; i >= 0; i--) {
+      const day = moment().subtract(i, "days").startOf("day");
+      const count = orders.filter((order) => moment(order.order_date).isSame(day, "day")).length;
+      dailyCounts.push({ day: day.format("MMM"), count });
+    }
+    setDailyOrders(dailyCounts);
+
+    const packedData = orders.reduce((acc, order) => {
+      const personName =
+        order.packed_person_name?.trim() === "Unknown" || !order.packed_person_name?.trim()
+          ? "Pending Orders"
+          : order.packed_person_name.trim();
+      acc[personName] = (acc[personName] || 0) + 1;
+      return acc;
+    }, {});
+
+    const packedPersonsArray = Object.entries(packedData).map(([name, count]) => ({ name, count }));
+    setPackedPersons(packedPersonsArray);
+
+    const todayOrders = orders.filter((order) => moment(order.order_date).isSame(today, "day"));
+    const courierData = todayOrders.reduce((acc, order) => {
+      if (order.shipments && order.shipments.length > 0) {
+        const uniqueCouriers = [
+          ...new Set(order.shipments.map((shipment) => shipment.courier_name?.trim()).filter(Boolean)),
+        ];
+        uniqueCouriers.forEach((courier) => {
+          acc[courier] = (acc[courier] || 0) + 1;
+        });
+      }
+      return acc;
+    }, {});
+
+    const todayCourierCountsArray = Object.entries(courierData)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count);
+    setTodayCourierCounts(todayCourierCountsArray);
+  };
 
   const percentageChange = (current, reference) => {
     if (reference === 0) return "+0%";
@@ -302,7 +325,6 @@ const DashboardPage = () => {
             </p>
           </Card>
         </Col>
-       
       </Row>
 
       {/* Charts and Tables */}
@@ -357,8 +379,23 @@ const DashboardPage = () => {
                   borderRadius: "6px",
                   color: currentTheme.textPrimary,
                 }}
+                formatter={(value) => [value, "Orders"]}
+                labelFormatter={(label) => `Month: ${label}`}
               />
-              <Line type="monotone" dataKey="count" stroke="#22B8CF" strokeWidth={2} />
+              <Line
+                type="monotone"
+                dataKey="count"
+                stroke="#22B8CF"
+                strokeWidth={2}
+                dot={{ r: 4 }}
+              >
+                <LabelList
+                  dataKey="count"
+                  position="top"
+                  fill={currentTheme.textPrimary}
+                  style={{ fontSize: "12px", fontWeight: "bold" }}
+                />
+              </Line>
             </LineChart>
           </Card>
         </Col>
@@ -397,6 +434,7 @@ const DashboardPage = () => {
                   borderRadius: "6px",
                   color: currentTheme.textPrimary,
                 }}
+                formatter={(value) => [value, "Orders"]}
               />
               <Legend wrapperStyle={{ color: currentTheme.textSecondary, fontSize: "12px" }} />
             </PieChart>
@@ -405,35 +443,6 @@ const DashboardPage = () => {
       </Row>
 
       <Row gutter={[16, 16]}>
-        <Col xs={24} md={12}>
-          <Card
-            style={{
-              background: currentTheme.cardBackground,
-              borderRadius: "15px",
-              border: "none",
-              padding: "15px",
-              color: currentTheme.textPrimary,
-            }}
-          >
-            <h3 style={{ fontSize: "16px", color: currentTheme.textPrimary, fontWeight: "600", marginBottom: "8px" }}>
-              Total Orders
-            </h3>
-            <BarChart width={400} height={250} data={dailyOrders}>
-              <XAxis dataKey="day" stroke={currentTheme.chartAxisColor} />
-              <YAxis stroke={currentTheme.chartAxisColor} />
-              <Tooltip
-                contentStyle={{
-                  background: currentTheme.tooltipBackground,
-                  border: "none",
-                  borderRadius: "6px",
-                  color: currentTheme.textPrimary,
-                }}
-              />
-              <Bar dataKey="count" fill="#FF6B6B" />
-            </BarChart>
-          </Card>
-        </Col>
-
         <Col xs={24} md={12}>
           <Card
             style={{
@@ -468,302 +477,159 @@ const DashboardPage = () => {
           </Card>
         </Col>
         <Col xs={24} sm={12} md={12}>
-        <Card
-  style={{
-    background: currentTheme.cardBackground,
-    borderRadius: "15px",
-    border: "none",
-    padding: "20px",
-    color: currentTheme.textPrimary,
-    boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
-  }}
->
-  <div
-    style={{
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between",
-      marginBottom: "12px",
-    }}
-  >
-    <div style={{ display: "flex", alignItems: "center" }}>
-      <FaTruck size={24} color="#FFA500" style={{ marginRight: "8px" }} />
-      <h3
-        style={{
-          fontSize: "16px",
-          fontWeight: "600",
-          color: currentTheme.textPrimary,
-          margin: 0,
-        }}
-      >
-        Today’s Orders by Courier
-      </h3>
-    </div>
-    <Badge
-      color="#FFA500"
-      text="Today"
-      style={{
-        color: currentTheme.textSecondary,
-        fontSize: "10px",
-        fontWeight: "500",
-        background: currentTheme.buttonBackground,
-        padding: "2px 6px",
-        borderRadius: "4px",
-      }}
-    />
-  </div>
-
-  <ul
-    style={{
-      listStyleType: "none",
-      padding: 0,
-      overflowY: "auto",
-      margin: 0,
-    }}
-  >
-    {todayCourierCounts.length > 0 ? (
-      todayCourierCounts.map((courier) => (
-        <li
-          key={courier.name}
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            padding: "8px 12px",
-            marginBottom: "4px",
-            background: currentTheme.cardBackground === "#FFFFFF" ? "#F9FAFB" : "#2D3748",
-            borderRadius: "8px",
-            transition: "background 0.2s ease",
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = currentTheme.cardBackground === "#FFFFFF" ? "#EDF2F7" : "#4A5568")}
-          onMouseLeave={(e) => (e.currentTarget.style.background = currentTheme.cardBackground === "#FFFFFF" ? "#F9FAFB" : "#2D3748")}
-        >
-          <span
+          <Card
             style={{
-              fontSize: "14px",
-              fontWeight: "500",
+              background: currentTheme.cardBackground,
+              borderRadius: "15px",
+              border: "none",
+              padding: "20px",
               color: currentTheme.textPrimary,
-              flex: 1,
+              boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
             }}
           >
-            {courier.name || "Unknown"}
-          </span>
-          <div style={{ display: "flex", alignItems: "center" }}>
-            <span
+            <div
               style={{
-                fontSize: "14px",
-                fontWeight: "bold",
-                color: "#FFA500",
-                marginRight: "8px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: "12px",
               }}
             >
-              {courier.count}
-            </span>
-            <Badge
-              count={courier.count}
+              <div style={{ display: "flex", alignItems: "center" }}>
+                <FaTruck size={24} color="#FFA500" style={{ marginRight: "8px" }} />
+                <h3
+                  style={{
+                    fontSize: "16px",
+                    fontWeight: "600",
+                    color: currentTheme.textPrimary,
+                    margin: 0,
+                  }}
+                >
+                  Today’s Orders by Courier
+                </h3>
+              </div>
+              <Badge
+                color="#FFA500"
+                text="Today"
+                style={{
+                  color: currentTheme.textSecondary,
+                  fontSize: "10px",
+                  fontWeight: "500",
+                  background: currentTheme.buttonBackground,
+                  padding: "2px 6px",
+                  borderRadius: "4px",
+                }}
+              />
+            </div>
+
+            <ul
               style={{
-                backgroundColor: "#FFA500",
-                color: "#FFF",
-                fontSize: "10px",
-                padding: "0 6px",
-                borderRadius: "10px",
+                listStyleType: "none",
+                padding: 0,
+                overflowY: "auto",
+                margin: 0,
               }}
-            />
-          </div>
-        </li>
-      ))
-    ) : (
-      <li
-        style={{
-          fontSize: "14px",
-          color: currentTheme.textSecondary,
-          textAlign: "center",
-          padding: "10px 0",
-        }}
-      >
-        No courier data for today
-      </li>
-    )}
-  </ul>
+            >
+              {todayCourierCounts.length > 0 ? (
+                todayCourierCounts.map((courier) => (
+                  <li
+                    key={courier.name}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      padding: "8px 12px",
+                      marginBottom: "4px",
+                      background: currentTheme.cardBackground === "#FFFFFF" ? "#F9FAFB" : "#2D3748",
+                      borderRadius: "8px",
+                      transition: "background 0.2s ease",
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = currentTheme.cardBackground === "#FFFFFF" ? "#EDF2F7" : "#4A5568")}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = currentTheme.cardBackground === "#FFFFFF" ? "#F9FAFB" : "#2D3748")}
+                  >
+                    <span
+                      style={{
+                        fontSize: "14px",
+                        fontWeight: "500",
+                        color: currentTheme.textPrimary,
+                        flex: 1,
+                      }}
+                    >
+                      {courier.name || "Unknown"}
+                    </span>
+                    <div style={{ display: "flex", alignItems: "center" }}>
+                      <span
+                        style={{
+                          fontSize: "14px",
+                          fontWeight: "bold",
+                          color: "#FFA500",
+                          marginRight: "8px",
+                        }}
+                      >
+                        {courier.count}
+                      </span>
+                      <Badge
+                        count={courier.count}
+                        style={{
+                          backgroundColor: "#FFA500",
+                          color: "#FFF",
+                          fontSize: "10px",
+                          padding: "0 6px",
+                          borderRadius: "10px",
+                        }}
+                      />
+                    </div>
+                  </li>
+                ))
+              ) : (
+                <li
+                  style={{
+                    fontSize: "14px",
+                    color: currentTheme.textSecondary,
+                    textAlign: "center",
+                    padding: "10px 0",
+                  }}
+                >
+                  No courier data for today
+                </li>
+              )}
+            </ul>
 
-  {/* Total Count Footer */}
-  {todayCourierCounts.length > 0 && (
-    <div
-      style={{
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        padding: "8px 12px",
-        marginTop: "8px",
-        borderTop: `1px solid ${currentTheme.borderColor}`,
-      }}
-    >
-      <span
-        style={{
-          fontSize: "14px",
-          fontWeight: "600",
-          color: currentTheme.textPrimary,
-        }}
-      >
-        Total
-      </span>
-      <span
-        style={{
-          fontSize: "14px",
-          fontWeight: "bold",
-          color: "#FFA500",
-        }}
-      >
-        {todayCourierCounts.reduce((sum, courier) => sum + courier.count, 0)}
-      </span>
-    </div>
-  )}
-</Card>
+            {todayCourierCounts.length > 0 && (
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "8px 12px",
+                  marginTop: "8px",
+                  borderTop: `1px solid ${currentTheme.borderColor}`,
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: "14px",
+                    fontWeight: "600",
+                    color: currentTheme.textPrimary,
+                  }}
+                >
+                  Total
+                </span>
+                <span
+                  style={{
+                    fontSize: "14px",
+                    fontWeight: "bold",
+                    color: "#FFA500",
+                  }}
+                >
+                  {todayCourierCounts.reduce((sum, courier) => sum + courier.count, 0)}
+                </span>
+              </div>
+            )}
+          </Card>
         </Col>
 
-        <Col xs={24} sm={12} md={12}> 
-        <Card
-  style={{
-    background: currentTheme.cardBackground,
-    borderRadius: "15px",
-    border: "none",
-    padding: "20px",
-    color: currentTheme.textPrimary,
-    boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
-  }}
->
-  <div
-    style={{
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between",
-      marginBottom: "12px",
-    }}
-  >
-    <div style={{ display: "flex", alignItems: "center" }}>
-      <FaChartBar size={24} color="#10B981" style={{ marginRight: "8px" }} /> {/* Using a chart icon */}
-      <h3
-        style={{
-          fontSize: "16px",
-          fontWeight: "600",
-          color: currentTheme.textPrimary,
-          margin: 0,
-        }}
-      >
-        Courier Analysis Insights
-      </h3>
-    </div>
-    <Badge
-      color="#10B981"
-      text="Today"
-      style={{
-        color: currentTheme.textSecondary,
-        fontSize: "10px",
-        fontWeight: "500",
-        background: currentTheme.buttonBackground,
-        padding: "2px 6px",
-        borderRadius: "4px",
-      }}
-    />
-  </div>
-
-  {/* Top Courier */}
-  {todayCourierCounts.length > 0 ? (
-    <div style={{ marginBottom: "16px" }}>
-      <span
-        style={{
-          fontSize: "14px",
-          color: currentTheme.textSecondary,
-        }}
-      >
-        Top Courier:
-      </span>
-      <span
-        style={{
-          fontSize: "14px",
-          fontWeight: "bold",
-          color: "#10B981",
-          marginLeft: "8px",
-        }}
-      >
-        {todayCourierCounts[0].name || "Unknown"} ({todayCourierCounts[0].count} orders)
-      </span>
-    </div>
-  ) : null}
-
-  {/* Mini Bar Chart */}
-  {todayCourierCounts.length > 0 ? (
-    <BarChart
-      width={220} // Compact size for the card
-      height={100}
-      data={todayCourierCounts.slice(0, 5)} // Show top 5 couriers
-      margin={{ top: 5, right: 0, left: 0, bottom: 5 }}
-    >
-      <XAxis
-        dataKey="name"
-        stroke={currentTheme.chartAxisColor}
-        tick={{ fontSize: 10, fill: currentTheme.textSecondary }}
-        interval={0} // Show all labels
-        angle={-45} // Rotate labels for readability
-        textAnchor="end"
-      />
-      <YAxis hide /> {/* Hide Y-axis for simplicity */}
-      <Tooltip
-        contentStyle={{
-          background: currentTheme.tooltipBackground,
-          border: "none",
-          borderRadius: "6px",
-          color: currentTheme.textPrimary,
-          fontSize: "12px",
-        }}
-      />
-      <Bar dataKey="count" fill="#10B981" radius={[4, 4, 0, 0]} />
-    </BarChart>
-  ) : (
-    <div
-      style={{
-        fontSize: "14px",
-        color: currentTheme.textSecondary,
-        textAlign: "center",
-        padding: "20px 0",
-      }}
-    >
-      No courier data available for analysis
-    </div>
-  )}
-
-  {/* Orders Without Shipments (Optional) */}
-  {orders && (
-    <div
-      style={{
-        marginTop: "12px",
-        padding: "8px 12px",
-        background: currentTheme.cardBackground === "#FFFFFF" ? "#FEF3F2" : "#4A5568",
-        borderRadius: "8px",
-      }}
-    >
-      <span
-        style={{
-          fontSize: "14px",
-          color: currentTheme.textSecondary,
-        }}
-      >
-        Orders without Shipments:
-      </span>
-      <span
-        style={{
-          fontSize: "14px",
-          fontWeight: "bold",
-          color: "#EF4444", // Red for attention
-          marginLeft: "8px",
-        }}
-      >
-        {orders.filter((order) => moment(order.order_date).isSame(moment().startOf("day"), "day") && (!order.shipments || order.shipments.length === 0)).length}
-      </span>
-    </div>
-  )}
-</Card>
-        </Col>
+        
       </Row>
     </div>
   );

@@ -1,11 +1,20 @@
 import React from "react";
-import ReactDOM from "react-dom/client";
+import { createRoot } from "react-dom/client"; // ✅ Import createRoot
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import App from "./App";
 
+// Create a QueryClient instance
+const queryClient = new QueryClient();
 
-const root = ReactDOM.createRoot(document.getElementById("root"));
+// Get the root DOM node
+const container = document.getElementById("root");
+
+// Create a root and render the app
+const root = createRoot(container);
 root.render(
   <React.StrictMode>
-    <App />
+    <QueryClientProvider client={queryClient}>
+      <App />
+    </QueryClientProvider>
   </React.StrictMode>
 );

@@ -13,7 +13,7 @@ const StockAssessmentPage = () => {
   const [loading, setLoading] = useState(true);
   const [stockData, setStockData] = useState([]);
   const [filteredData, setFilteredData] = useState([]);
-  const [orderCount, setOrderCount] = useState(0); // New state for order count
+  const [orderCount, setOrderCount] = useState(0); // State for today's order count
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -22,7 +22,6 @@ const StockAssessmentPage = () => {
       navigate("/");
       return;
     }
-
     const fetchStockData = async () => {
       try {
         const response = await axios.get(`${config.apiBaseUrl}/all-orders`, {
@@ -30,52 +29,79 @@ const StockAssessmentPage = () => {
         });
         const orders = response.data.orders || [];
 
-        // Calculate total quantity for each product for today's orders
+        // Filter orders for today based on order_date
         const today = moment().startOf("day");
-        const todayOrders = orders.filter((order) =>
-          moment(order.shiprocketDate).isSame(today, "day")
-        );
+        const todayOrders = orders.filter((order) => {
+          if (!order.order_date) {
+            console.warn(`[StockAssessment] Order ${order.orderID} has no order_date`);
+            return false;
+          }
+          const orderDate = moment(order.order_date);
+          const isToday = orderDate.isSame(today, "day");
+          return isToday;
+        });
 
+        if (todayOrders.length === 0) {
+          message.info("No orders found for today.");
+          console.log(`[StockAssessment] No orders for ${today.format("YYYY-MM-DD")}`);
+        } else {
+          console.log(`[StockAssessment] Found ${todayOrders.length} orders for ${today.format("YYYY-MM-DD")}`);
+        }
+
+        // Aggregate quantities by product
         const productData = {};
-        todayOrders.forEach((order) => {
+        todayOrders.forEach((order, orderIndex) => {
+          if (!order.products || !Array.isArray(order.products)) {
+            console.warn(`[StockAssessment] Order ${order.orderID} has no valid products array`);
+            return;
+          }
           order.products.forEach((product) => {
-            if (productData[product.name]) {
-              productData[product.name].quantity += product.quantity;
+            const productName = product.name || "Unknown Product";
+            const quantity = Number(product.quantity) || 0;
+            const sku = product.sku || "N/A";
+
+            if (productData[productName]) {
+              productData[productName].quantity += quantity;
             } else {
-              productData[product.name] = {
-                quantity: product.quantity,
-                sku: product.sku, // Include SKU in the product data
+              productData[productName] = {
+                quantity: quantity,
+                sku: sku,
               };
             }
           });
         });
 
-        // Convert productData object to an array for the table
+        console.log("[StockAssessment] Aggregated product data:", productData);
+
+        // Convert to array for table
         const stockArray = Object.entries(productData).map(([name, data], index) => ({
           key: index + 1,
           sno: index + 1,
           productName: name,
-          sku: data.sku, // Add SKU to the table data
+          sku: data.sku,
           orderedQuantity: data.quantity,
         }));
 
-        // Sort by highest quantity by default
         stockArray.sort((a, b) => b.orderedQuantity - a.orderedQuantity);
 
+        if (stockArray.length === 0) {
+          console.log("[StockAssessment] No products aggregated for today.");
+        }
+
         setStockData(stockArray);
-        setFilteredData(stockArray); // Initially, show today's data
-        setOrderCount(todayOrders.length); // Set the order count for today
+        setFilteredData(stockArray);
+        setOrderCount(todayOrders.length);
       } catch (error) {
-        console.error("Failed to fetch stock data", error);
+        console.error("[StockAssessment] Failed to fetch stock data:", error);
         if (error.response?.status === 401) {
           Cookies.remove("token");
           navigate("/");
         }
+        message.error("Failed to load stock data.");
       } finally {
         setLoading(false);
       }
     };
-
     fetchStockData();
   }, [navigate]);
 
@@ -83,17 +109,7 @@ const StockAssessmentPage = () => {
     const worksheet = XLSX.utils.json_to_sheet(filteredData);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Stock Assessment");
-    XLSX.writeFile(workbook, "StockAssessment.xlsx");
-  };
-
-  const exportToPDF = () => {
-    const doc = new jsPDF(); // Create a new jsPDF instance
-    doc.text("Stock Assessment", 14, 10); // Add a title to the PDF
-    doc.autoTable({
-      head: [["S.No", "Product Name", "SKU", "Ordered Quantity"]], // Table headers
-      body: filteredData.map((item) => [item.sno, item.productName, item.sku, item.orderedQuantity]), // Table data
-    });
-    doc.save("StockAssessment.pdf"); // Save the PDF
+    XLSX.writeFile(workbook, `StockAssessment_${moment().format("YYYY-MM-DD")}.xlsx`);
   };
 
   const columns = [
@@ -101,7 +117,7 @@ const StockAssessmentPage = () => {
       title: "S.No",
       key: "sno",
       align: "center",
-      render: (text, record, index) => index + 1, // Dynamically generate serial numbers
+      render: (text, record, index) => index + 1,
     },
     {
       title: "Product Name",
@@ -118,8 +134,8 @@ const StockAssessmentPage = () => {
       dataIndex: "orderedQuantity",
       key: "orderedQuantity",
       align: "center",
-      sorter: (a, b) => a.orderedQuantity - b.orderedQuantity, // Enable sorting by quantity
-      defaultSortOrder: "descend", // Default to descending order
+      sorter: (a, b) => a.orderedQuantity - b.orderedQuantity,
+      defaultSortOrder: "descend",
     },
   ];
 
@@ -132,17 +148,32 @@ const StockAssessmentPage = () => {
   }
 
   return (
-    <div style={ {padding :'15px'}}>
-      <h1 style={{ fontSize: "24px", fontWeight: "bold", marginBottom: "20px" }}>Today's Stock Assessment</h1>
+    <div style={{ padding: "15px" }}>
+      <h1 style={{ fontSize: "24px", fontWeight: "bold", marginBottom: "10px" }}>
+        Stock Assessment for {moment().format("DD/MM/YYYY")}
+      </h1>
+      <p style={{ fontSize: "16px", color: "#555", marginBottom: "20px" }}>
+        Showing total quantities ordered today
+      </p>
 
       {/* Export Buttons and Order Count */}
-      <div style={{ marginBottom: "20px", display: "flex", alignItems: "center" }}>
-        <Button type="default" onClick={exportToExcel} style={{ marginRight: "10px" }}>
+      <div style={{ marginBottom: "20px", display: "flex", alignItems: "center", gap: "10px" }}>
+        <Button type="default" onClick={exportToExcel}>
           Export to Excel
         </Button>
-    
-        <div style={{ marginLeft: "auto", fontSize: "16px", fontWeight: "bold" }}>
-          Total Orders: {orderCount}
+      
+       
+        <div
+          style={{
+            marginLeft: "auto",
+            fontSize: "18px",
+            fontWeight: "bold",
+            background: "#e6f7ff",
+            padding: "8px 16px",
+            borderRadius: "4px",
+          }}
+        >
+          Today's Orders: {orderCount}
         </div>
       </div>
 
@@ -153,6 +184,7 @@ const StockAssessmentPage = () => {
         bordered
         pagination={{ pageSize: 50 }}
         style={{ background: "#fff", borderRadius: "12px" }}
+        locale={{ emptyText: "No products ordered today" }}
       />
     </div>
   );

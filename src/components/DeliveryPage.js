@@ -4,9 +4,8 @@ import { message, Card, Table, Typography, Tag } from "antd";
 import { ClockCircleOutlined, FireFilled } from "@ant-design/icons";
 import moment from "moment";
 import debounce from "lodash.debounce";
-
 const { Title, Text } = Typography;
-
+import config from "../config.js"; // Adjust the import path as necessary
 const DeliveryPage = () => {
   const [awbCode, setAwbCode] = useState("");
   const [fullAwbCode, setFullAwbCode] = useState(""); // Store the full AWB code with prefix
@@ -17,6 +16,8 @@ const DeliveryPage = () => {
   const [lastKeyTime, setLastKeyTime] = useState(0);
   const [currentTime, setCurrentTime] = useState(moment().format("HH:mm:ss"));
   const [temperature, setTemperature] = useState("30°C");
+
+  const allowedStatuses = ["PICKUP EXCEPTION", "OUT FOR PICKUP", "PICKUP SCHEDULED", "Overridden"];
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -65,7 +66,7 @@ const DeliveryPage = () => {
   const fetchOrderDetails = (scannedAwbCode) => {
     setStatusMessage(`Fetching order details for AWB: ${scannedAwbCode}...`);
     setDeliveryStage("SCANNING");
-    const url = `http://localhost:5000/order/awb/${encodeURIComponent(scannedAwbCode)}`;
+    const url = `${config.apiBaseUrl}/order/awb/${encodeURIComponent(scannedAwbCode)}`;
 
     axios
       .get(url)
@@ -74,28 +75,33 @@ const DeliveryPage = () => {
           setStatusMessage("No order found for this AWB code.");
           setDeliveryStage("INITIAL");
           message.error("No order found.");
-        } else if (res.data.order.packed_status !== "Completed") {
-          setStatusMessage("Order must be packed before delivery.");
-          setDeliveryStage("INITIAL");
-          message.warning("Order not packed yet.");
-        } else if (res.data.order.warehouse_out === "Yes") {
-          setStatusMessage("Order already marked as warehouse out.");
-          setDeliveryStage("COMPLETED");
-          message.warning("Order already processed for delivery.");
-          setOrderDetails(res.data.order);
-          setAwbCode(scannedAwbCode);
-          // Find the full AWB code from shipments
-          const shipment = res.data.order.shipments.find((s) => s.awb_code.includes(scannedAwbCode));
-          setFullAwbCode(shipment ? shipment.awb_code : scannedAwbCode);
         } else {
-          setOrderDetails(res.data.order);
-          setAwbCode(scannedAwbCode);
-          // Find the full AWB code from shipments
           const shipment = res.data.order.shipments.find((s) => s.awb_code.includes(scannedAwbCode));
-          setFullAwbCode(shipment ? shipment.awb_code : scannedAwbCode);
-          setStatusMessage(`AWB ${scannedAwbCode} scanned successfully. Scan again to confirm delivery.`);
-          setDeliveryStage("DELIVERING");
-          message.success("AWB scanned! Scan again to confirm warehouse out.");
+          const shipmentStatus = shipment ? shipment.status : "N/A";
+
+          if (res.data.order.packed_status !== "Completed" && res.data.order.packed_status !== "Overridden") {
+            setStatusMessage("Order must be packed or overridden before delivery.");
+            setDeliveryStage("INITIAL");
+            message.warning("Order not packed or overridden.");
+          } else if (!allowedStatuses.includes(shipmentStatus)) {
+            setStatusMessage(`Order cannot be delivered with status: ${shipmentStatus}.`);
+            setDeliveryStage("INITIAL");
+            message.warning(`Order cannot be delivered with status: ${shipmentStatus}.`);
+          } else if (res.data.order.warehouse_out === "Yes") {
+            setStatusMessage("Order already marked as warehouse out.");
+            setDeliveryStage("COMPLETED");
+            message.warning("Order already processed for delivery.");
+            setOrderDetails(res.data.order);
+            setAwbCode(scannedAwbCode);
+            setFullAwbCode(shipment ? shipment.awb_code : scannedAwbCode);
+          } else {
+            setOrderDetails(res.data.order);
+            setAwbCode(scannedAwbCode);
+            setFullAwbCode(shipment ? shipment.awb_code : scannedAwbCode);
+            setStatusMessage(`AWB ${scannedAwbCode} scanned successfully. Scan again to confirm delivery.`);
+            setDeliveryStage("DELIVERING");
+            message.success("AWB scanned! Scan again to confirm warehouse out.");
+          }
         }
       })
       .catch(() => {
@@ -103,14 +109,13 @@ const DeliveryPage = () => {
         setDeliveryStage("INITIAL");
         message.error("Failed to fetch order.");
       });
-  };
+};
 
   const updateDeliveryStatus = () => {
     const warehouseOutDate = new Date().toISOString();
     const warehouseOutTime = moment().format("HH:mm:ss");
-
     axios
-      .post(`http://localhost:5000/order/awb/${encodeURIComponent(awbCode)}/delivery`, {
+    .post(`${config.apiBaseUrl}/order/awb/${encodeURIComponent(awbCode)}/delivery`, { // Use config.apiBaseUrl
         warehouse_out: "Yes",
         warehouse_out_date: warehouseOutDate,
         warehouse_out_time: warehouseOutTime,
