@@ -61,7 +61,7 @@ const SettingsPage = ({ token, userName }) => {
         })
         .catch((err) => {
           console.error('Failed to fetch users:', err.response?.data || err.message);
-          message.error('Failed to fetch users');
+          message.error('Session expired. Please log in again.');
         })
         .finally(() => {
           setLoading(false); // Stop loading after fetching users
