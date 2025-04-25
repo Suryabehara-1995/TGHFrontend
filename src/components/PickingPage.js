@@ -25,9 +25,8 @@ const PickingPage = ({ orders, userName, refetch }) => {
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [pickedItems, setPickedItems] = useState({});
   const [loading, setLoading] = useState(false);
-  const [startTime, setStartTime] = useState(null); // Track start time
+  const [startTime, setStartTime] = useState(null);
 
-  // Set start time when an order is selected
   useEffect(() => {
     if (selectedOrder) {
       setStartTime(new Date());
@@ -69,7 +68,7 @@ const PickingPage = ({ orders, userName, refetch }) => {
 
   const handlePickOrder = async (orderID) => {
     setLoading(true);
-    const endTime = new Date(); // Track end time
+    const endTime = new Date();
     try {
       const response = await axios.post(
         `${config.apiBaseUrl}/pick-order`,
@@ -97,9 +96,9 @@ const PickingPage = ({ orders, userName, refetch }) => {
       );
 
       if (response.status === 200) {
-        refetch(); // Refresh orders data
+        refetch();
         setSelectedOrder(null);
-        setStartTime(null); // Reset start time
+        setStartTime(null);
         message.success(`Order ${orderID} marked as Picked by ${userName}`);
       }
     } catch (error) {
@@ -112,7 +111,7 @@ const PickingPage = ({ orders, userName, refetch }) => {
 
   const handleBack = () => {
     setSelectedOrder(null);
-    setStartTime(null); // Reset start time
+    setStartTime(null);
   };
 
   return (
@@ -183,7 +182,7 @@ const PickingPage = ({ orders, userName, refetch }) => {
                   dataIndex: "sku",
                   render: (sku) => (
                     <Tag
-                      color="Red"
+                      color={sku && sku.toLowerCase().startsWith("1kg") ? "red" : "blue"} // Red for SKUs starting with "1kg", blue for others
                       style={{ fontWeight: "bold", textAlign: "center" }}
                     >
                       {sku}
@@ -195,7 +194,7 @@ const PickingPage = ({ orders, userName, refetch }) => {
                   dataIndex: "quantity",
                   render: (qty) => (
                     <Tag
-                      color="Red"
+                      color={qty > 1 ? "red" : "blue"} // Red for qty > 1, blue for qty = 1
                       style={{ fontWeight: "bold", textAlign: "center" }}
                     >
                       {qty}
