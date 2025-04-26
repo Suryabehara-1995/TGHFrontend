@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { Card, Row, Col, Badge, Button } from "antd";
-import { LineChart, Line, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, LabelList } from "recharts";
+import { LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, Legend } from "recharts";
 import { FaChartBar, FaCalendarDay, FaCalendarMinus, FaPauseCircle, FaCheckCircle, FaSun, FaMoon, FaTruck } from "react-icons/fa";
 import moment from "moment";
 import { Triangle } from "react-loader-spinner";
@@ -58,7 +58,6 @@ const DashboardPage = () => {
     fetchOrders();
 
     const socket = io(config.websocketUrl);
-
     socket.on("orderUpdated", (updatedOrder) => {
       setOrders((prevOrders) => {
         const updatedOrders = prevOrders.map((order) =>
@@ -216,111 +215,97 @@ const DashboardPage = () => {
       </div>
 
       {/* Stat Cards */}
-      <Row gutter={[16, 16]} style={{ marginBottom: "24px" }}>
-        <Col xs={24} sm={12} md={6}>
+      <Row gutter={[8, 8]} style={{ marginBottom: "16px" }}>
+        <Col xs={12} sm={12} md={6}>
           <Card
             style={{
               background: currentTheme.cardBackground,
-              borderRadius: "15px",
+              borderRadius: "12px",
               border: "none",
-              padding: "15px",
+              padding: "10px",
               color: currentTheme.textPrimary,
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
-              <FaCalendarDay size={20} color="#22B8CF" />
-              <Badge
-                color="#22B8CF"
-                text="Today"
-                style={{ color: currentTheme.textSecondary, fontSize: "10px", fontWeight: "500" }}
-              />
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
+              <FaCalendarDay size={18} color="#22B8CF" />
+              <Badge color="#22B8CF" text="Today" style={{ color: currentTheme.textSecondary, fontSize: "10px", fontWeight: "500" }} />
             </div>
-            <h3 style={{ fontSize: "14px", color: currentTheme.textSecondary, marginBottom: "4px" }}>Today Orders</h3>
-            <p style={{ fontSize: "24px", fontWeight: "bold", color: currentTheme.textPrimary, marginBottom: "4px" }}>
+            <h3 style={{ fontSize: "12px", color: currentTheme.textSecondary, marginBottom: "4px" }}>Today Orders</h3>
+            <p style={{ fontSize: "20px", fontWeight: "bold", color: currentTheme.textPrimary, marginBottom: "4px" }}>
               {orderCounts.today}
             </p>
-            <p style={{ fontSize: "12px", color: orderCounts.today >= orderCounts.yesterday ? "#22C55E" : "#FF6B6B" }}>
+            <p style={{ fontSize: "10px", color: orderCounts.today >= orderCounts.yesterday ? "#22C55E" : "#FF6B6B" }}>
               {percentageChange(orderCounts.today, orderCounts.yesterday)} since yesterday
             </p>
           </Card>
         </Col>
-        <Col xs={24} sm={12} md={6}>
+
+        <Col xs={12} sm={12} md={6}>
           <Card
             style={{
               background: currentTheme.cardBackground,
-              borderRadius: "15px",
+              borderRadius: "12px",
               border: "none",
-              padding: "15px",
+              padding: "10px",
               color: currentTheme.textPrimary,
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
-              <FaCalendarMinus size={20} color="#FF6B6B" />
-              <Badge
-                color="#FF6B6B"
-                text="Yesterday"
-                style={{ color: currentTheme.textSecondary, fontSize: "10px", fontWeight: "500" }}
-              />
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
+              <FaCalendarMinus size={18} color="#FF6B6B" />
+              <Badge color="#FF6B6B" text="Yesterday" style={{ color: currentTheme.textSecondary, fontSize: "10px", fontWeight: "500" }} />
             </div>
-            <h3 style={{ fontSize: "14px", color: currentTheme.textSecondary, marginBottom: "4px" }}>Yesterday Orders</h3>
-            <p style={{ fontSize: "24px", fontWeight: "bold", color: currentTheme.textPrimary, marginBottom: "4px" }}>
+            <h3 style={{ fontSize: "12px", color: currentTheme.textSecondary, marginBottom: "4px" }}>Yesterday Orders</h3>
+            <p style={{ fontSize: "20px", fontWeight: "bold", color: currentTheme.textPrimary, marginBottom: "4px" }}>
               {orderCounts.yesterday}
             </p>
-            <p style={{ fontSize: "12px", color: orderCounts.yesterday >= orderCounts.today ? "#22C55E" : "#FF6B6B" }}>
+            <p style={{ fontSize: "10px", color: orderCounts.yesterday >= orderCounts.today ? "#22C55E" : "#FF6B6B" }}>
               {percentageChange(orderCounts.yesterday, orderCounts.today)} compared to today
             </p>
           </Card>
         </Col>
-        <Col xs={24} sm={12} md={6}>
+
+        <Col xs={12} sm={12} md={6}>
           <Card
             style={{
               background: currentTheme.cardBackground,
-              borderRadius: "15px",
+              borderRadius: "12px",
               border: "none",
-              padding: "15px",
+              padding: "10px",
               color: currentTheme.textPrimary,
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
-              <FaPauseCircle size={20} color="#A855F7" />
-              <Badge
-                color="#A855F7"
-                text="On Hold"
-                style={{ color: currentTheme.textSecondary, fontSize: "10px", fontWeight: "500" }}
-              />
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
+              <FaPauseCircle size={18} color="#A855F7" />
+              <Badge color="#A855F7" text="On Hold" style={{ color: currentTheme.textSecondary, fontSize: "10px", fontWeight: "500" }} />
             </div>
-            <h3 style={{ fontSize: "14px", color: currentTheme.textSecondary, marginBottom: "4px" }}>Orders on Hold</h3>
-            <p style={{ fontSize: "24px", fontWeight: "bold", color: currentTheme.textPrimary, marginBottom: "4px" }}>
+            <h3 style={{ fontSize: "12px", color: currentTheme.textSecondary, marginBottom: "4px" }}>Orders on Hold</h3>
+            <p style={{ fontSize: "20px", fontWeight: "bold", color: currentTheme.textPrimary, marginBottom: "4px" }}>
               {orderCounts.onHold}
             </p>
-            <p style={{ fontSize: "12px", color: "#FF6B6B" }}>
+            <p style={{ fontSize: "10px", color: "#FF6B6B" }}>
               {percentageChange(orderCounts.onHold, orderCounts.total)} of total orders
             </p>
           </Card>
         </Col>
-        <Col xs={24} sm={12} md={6}>
+        <Col xs={12} sm={12} md={6}>
           <Card
             style={{
               background: currentTheme.cardBackground,
-              borderRadius: "15px",
+              borderRadius: "12px",
               border: "none",
-              padding: "15px",
+              padding: "10px",
               color: currentTheme.textPrimary,
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
-              <FaCheckCircle size={20} color="#22C55E" />
-              <Badge
-                color="#22C55E"
-                text="Completed"
-                style={{ color: currentTheme.textSecondary, fontSize: "10px", fontWeight: "500" }}
-              />
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
+              <FaCheckCircle size={18} color="#22C55E" />
+              <Badge color="#22C55E" text="Completed" style={{ color: currentTheme.textSecondary, fontSize: "10px", fontWeight: "500" }} />
             </div>
-            <h3 style={{ fontSize: "14px", color: currentTheme.textSecondary, marginBottom: "4px" }}>Completed Orders</h3>
-            <p style={{ fontSize: "24px", fontWeight: "bold", color: currentTheme.textPrimary, marginBottom: "4px" }}>
+            <h3 style={{ fontSize: "12px", color: currentTheme.textSecondary, marginBottom: "4px" }}>Completed Orders</h3>
+            <p style={{ fontSize: "20px", fontWeight: "bold", color: currentTheme.textPrimary, marginBottom: "4px" }}>
               {orderCounts.completed}
             </p>
-            <p style={{ fontSize: "12px", color: "#22C55E" }}>
+            <p style={{ fontSize: "10px", color: "#22C55E" }}>
               {percentageChange(orderCounts.completed, orderCounts.total)} of total orders
             </p>
           </Card>
@@ -328,19 +313,19 @@ const DashboardPage = () => {
       </Row>
 
       {/* Charts and Tables */}
-      <Row gutter={[16, 16]} style={{ marginBottom: "24px" }}>
+      <Row gutter={[8, 8]} style={{ marginBottom: "16px" }}>
         <Col xs={24} md={16}>
           <Card
             style={{
               background: currentTheme.cardBackground,
-              borderRadius: "15px",
+              borderRadius: "12px",
               border: "none",
-              padding: "15px",
+              padding: "10px",
               color: currentTheme.textPrimary,
             }}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-              <h3 style={{ fontSize: "16px", color: currentTheme.textPrimary, fontWeight: "600" }}>Sales Value</h3>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+              <h3 style={{ fontSize: "14px", color: currentTheme.textPrimary, fontWeight: "600" }}>Sales Value</h3>
               <div>
                 <Button
                   style={{
@@ -348,8 +333,8 @@ const DashboardPage = () => {
                     color: currentTheme.textSecondary,
                     border: "none",
                     borderRadius: "6px",
-                    padding: "4px 8px",
-                    fontSize: "12px",
+                    padding: "4px 6px",
+                    fontSize: "10px",
                     marginRight: "4px",
                   }}
                 >
@@ -361,15 +346,15 @@ const DashboardPage = () => {
                     color: currentTheme.textSecondary,
                     border: "none",
                     borderRadius: "6px",
-                    padding: "4px 8px",
-                    fontSize: "12px",
+                    padding: "4px 6px",
+                    fontSize: "10px",
                   }}
                 >
                   Week
                 </Button>
               </div>
             </div>
-            <LineChart width={500} height={250} data={dailyOrders}>
+            <LineChart width={window.innerWidth < 768 ? 300 : 500} height={200} data={dailyOrders}>
               <XAxis dataKey="day" stroke={currentTheme.chartAxisColor} />
               <YAxis stroke={currentTheme.chartAxisColor} />
               <Tooltip
@@ -388,14 +373,7 @@ const DashboardPage = () => {
                 stroke="#22B8CF"
                 strokeWidth={2}
                 dot={{ r: 4 }}
-              >
-                <LabelList
-                  dataKey="count"
-                  position="top"
-                  fill={currentTheme.textPrimary}
-                  style={{ fontSize: "12px", fontWeight: "bold" }}
-                />
-              </Line>
+              />
             </LineChart>
           </Card>
         </Col>
@@ -404,23 +382,23 @@ const DashboardPage = () => {
           <Card
             style={{
               background: currentTheme.cardBackground,
-              borderRadius: "15px",
+              borderRadius: "12px",
               border: "none",
-              padding: "15px",
+              padding: "10px",
               color: currentTheme.textPrimary,
             }}
           >
-            <h3 style={{ fontSize: "16px", color: currentTheme.textPrimary, fontWeight: "600", marginBottom: "8px" }}>
+            <h3 style={{ fontSize: "14px", color: currentTheme.textPrimary, fontWeight: "600", marginBottom: "6px" }}>
               Order Status
             </h3>
-            <PieChart width={250} height={250}>
+            <PieChart width={window.innerWidth < 768 ? 200 : 250} height={200}>
               <Pie
                 data={pieData}
                 dataKey="value"
                 nameKey="name"
                 cx="50%"
                 cy="50%"
-                outerRadius={80}
+                outerRadius={window.innerWidth < 768 ? 60 : 80}
                 fill="#8884d8"
               >
                 {pieData.map((entry, index) => (
@@ -436,24 +414,24 @@ const DashboardPage = () => {
                 }}
                 formatter={(value) => [value, "Orders"]}
               />
-              <Legend wrapperStyle={{ color: currentTheme.textSecondary, fontSize: "12px" }} />
+              <Legend wrapperStyle={{ color: currentTheme.textSecondary, fontSize: "10px" }} />
             </PieChart>
           </Card>
         </Col>
       </Row>
 
-      <Row gutter={[16, 16]}>
+      <Row gutter={[8, 8]}>
         <Col xs={24} md={12}>
           <Card
             style={{
               background: currentTheme.cardBackground,
-              borderRadius: "15px",
+              borderRadius: "12px",
               border: "none",
-              padding: "15px",
+              padding: "10px",
               color: currentTheme.textPrimary,
             }}
           >
-            <h3 style={{ fontSize: "16px", color: currentTheme.textPrimary, fontWeight: "600", marginBottom: "8px" }}>
+            <h3 style={{ fontSize: "14px", color: currentTheme.textPrimary, fontWeight: "600", marginBottom: "6px" }}>
               Users
             </h3>
             <ul style={{ listStyleType: "none", padding: 0 }}>
@@ -463,12 +441,12 @@ const DashboardPage = () => {
                   style={{
                     display: "flex",
                     justifyContent: "space-between",
-                    padding: "8px 0",
+                    padding: "6px 0",
                     borderBottom: `1px solid ${currentTheme.borderColor}`,
                   }}
                 >
-                  <span style={{ fontSize: "14px", color: currentTheme.textSecondary }}>{person.name}</span>
-                  <span style={{ fontSize: "14px", fontWeight: "bold", color: "#22B8CF" }}>
+                  <span style={{ fontSize: "12px", color: currentTheme.textSecondary }}>{person.name}</span>
+                  <span style={{ fontSize: "12px", fontWeight: "bold", color: "#22B8CF" }}>
                     {person.count}
                   </span>
                 </li>
@@ -480,56 +458,26 @@ const DashboardPage = () => {
           <Card
             style={{
               background: currentTheme.cardBackground,
-              borderRadius: "15px",
+              borderRadius: "12px",
               border: "none",
-              padding: "20px",
+              padding: "10px",
               color: currentTheme.textPrimary,
-              boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
             }}
           >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                marginBottom: "12px",
-              }}
-            >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
               <div style={{ display: "flex", alignItems: "center" }}>
-                <FaTruck size={24} color="#FFA500" style={{ marginRight: "8px" }} />
-                <h3
-                  style={{
-                    fontSize: "16px",
-                    fontWeight: "600",
-                    color: currentTheme.textPrimary,
-                    margin: 0,
-                  }}
-                >
+                <FaTruck size={20} color="#FFA500" style={{ marginRight: "6px" }} />
+                <h3 style={{ fontSize: "14px", fontWeight: "600", color: currentTheme.textPrimary, margin: 0 }}>
                   Today’s Orders by Courier
                 </h3>
               </div>
               <Badge
                 color="#FFA500"
                 text="Today"
-                style={{
-                  color: currentTheme.textSecondary,
-                  fontSize: "10px",
-                  fontWeight: "500",
-                  background: currentTheme.buttonBackground,
-                  padding: "2px 6px",
-                  borderRadius: "4px",
-                }}
+                style={{ color: currentTheme.textSecondary, fontSize: "10px", fontWeight: "500", background: currentTheme.buttonBackground, padding: "2px 4px", borderRadius: "4px" }}
               />
             </div>
-
-            <ul
-              style={{
-                listStyleType: "none",
-                padding: 0,
-                overflowY: "auto",
-                margin: 0,
-              }}
-            >
+            <ul style={{ listStyleType: "none", padding: 0, maxHeight: "200px", overflowY: "auto" }}>
               {todayCourierCounts.length > 0 ? (
                 todayCourierCounts.map((courier) => (
                   <li
@@ -538,98 +486,42 @@ const DashboardPage = () => {
                       display: "flex",
                       justifyContent: "space-between",
                       alignItems: "center",
-                      padding: "8px 12px",
+                      padding: "6px 8px",
                       marginBottom: "4px",
                       background: currentTheme.cardBackground === "#FFFFFF" ? "#F9FAFB" : "#2D3748",
-                      borderRadius: "8px",
-                      transition: "background 0.2s ease",
+                      borderRadius: "6px",
                     }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = currentTheme.cardBackground === "#FFFFFF" ? "#EDF2F7" : "#4A5568")}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = currentTheme.cardBackground === "#FFFFFF" ? "#F9FAFB" : "#2D3748")}
                   >
-                    <span
-                      style={{
-                        fontSize: "14px",
-                        fontWeight: "500",
-                        color: currentTheme.textPrimary,
-                        flex: 1,
-                      }}
-                    >
+                    <span style={{ fontSize: "12px", fontWeight: "500", color: currentTheme.textPrimary, flex: 1 }}>
                       {courier.name || "Unknown"}
                     </span>
                     <div style={{ display: "flex", alignItems: "center" }}>
-                      <span
-                        style={{
-                          fontSize: "14px",
-                          fontWeight: "bold",
-                          color: "#FFA500",
-                          marginRight: "8px",
-                        }}
-                      >
+                      <span style={{ fontSize: "12px", fontWeight: "bold", color: "#FFA500", marginRight: "6px" }}>
                         {courier.count}
                       </span>
                       <Badge
                         count={courier.count}
-                        style={{
-                          backgroundColor: "#FFA500",
-                          color: "#FFF",
-                          fontSize: "10px",
-                          padding: "0 6px",
-                          borderRadius: "10px",
-                        }}
+                        style={{ backgroundColor: "#FFA500", color: "#FFF", fontSize: "10px", padding: "0 4px", borderRadius: "10px" }}
                       />
                     </div>
                   </li>
                 ))
               ) : (
-                <li
-                  style={{
-                    fontSize: "14px",
-                    color: currentTheme.textSecondary,
-                    textAlign: "center",
-                    padding: "10px 0",
-                  }}
-                >
+                <li style={{ fontSize: "12px", color: currentTheme.textSecondary, textAlign: "center", padding: "8px 0" }}>
                   No courier data for today
                 </li>
               )}
             </ul>
-
             {todayCourierCounts.length > 0 && (
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  padding: "8px 12px",
-                  marginTop: "8px",
-                  borderTop: `1px solid ${currentTheme.borderColor}`,
-                }}
-              >
-                <span
-                  style={{
-                    fontSize: "14px",
-                    fontWeight: "600",
-                    color: currentTheme.textPrimary,
-                  }}
-                >
-                  Total
-                </span>
-                <span
-                  style={{
-                    fontSize: "14px",
-                    fontWeight: "bold",
-                    color: "#FFA500",
-                  }}
-                >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 8px", marginTop: "6px", borderTop: `1px solid ${currentTheme.borderColor}` }}>
+                <span style={{ fontSize: "12px", fontWeight: "600", color: currentTheme.textPrimary }}>Total</span>
+                <span style={{ fontSize: "12px", fontWeight: "bold", color: "#FFA500" }}>
                   {todayCourierCounts.reduce((sum, courier) => sum + courier.count, 0)}
                 </span>
               </div>
             )}
           </Card>
         </Col>
-
-        
       </Row>
     </div>
   );
