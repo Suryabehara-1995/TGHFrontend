@@ -5,11 +5,12 @@ import { LockOutlined, UserOutlined } from "@ant-design/icons";
 import Cookies from "js-cookie";
 import { useNavigate } from "react-router-dom";
 import "./SignIn.css";
-import config from "../config"; // Import the config file
+import config from "../config";
 
 const SignIn = ({ setToken, setUserName, setPermissions }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false); // Add loading state
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -25,8 +26,9 @@ const SignIn = ({ setToken, setUserName, setPermissions }) => {
   }, [setToken, setUserName, setPermissions, navigate]);
 
   const handleSubmit = async () => {
+    setLoading(true); // Set loading to true when request starts
     try {
-      const response = await axios.post(`${config.apiBaseUrl}/login`, { // Use config.apiBaseUrl
+      const response = await axios.post(`${config.apiBaseUrl}/login`, {
         email,
         password,
       });
@@ -36,7 +38,6 @@ const SignIn = ({ setToken, setUserName, setPermissions }) => {
       setToken(token);
       setUserName(name);
       setPermissions(permissions);
-
       // Store in cookies with expiration (e.g., 7 days)
       Cookies.set("token", token, { expires: 7, secure: true, sameSite: "Strict" });
       Cookies.set("userName", name, { expires: 7, secure: true, sameSite: "Strict" });
@@ -47,19 +48,17 @@ const SignIn = ({ setToken, setUserName, setPermissions }) => {
       });
 
       message.success("Login successful");
-      navigate("/dashboard"); // Navigate to dashboard without refresh
+      navigate("/dashboard");
     } catch (error) {
       message.error("Invalid email or password");
+    } finally {
+      setLoading(false); // Reset loading state after request completes
     }
   };
 
   return (
     <div className="login-container">
       <div className="login-wrapper">
-        {/* Left side GIF */}
-        {/* Note: You didn’t include this in your code snippet, so I’m assuming it’s commented out */}
-
-        {/* Right side Login Form */}
         <div className="login-card">
           <div className="logo" style={{ padding: "16px", textAlign: "center" }}>
             <img
@@ -92,7 +91,12 @@ const SignIn = ({ setToken, setUserName, setPermissions }) => {
               <Checkbox>Remember me</Checkbox>
             </Form.Item>
             <Form.Item>
-              <Button type="primary" htmlType="submit" className="login-button">
+              <Button
+                type="primary"
+                htmlType="submit"
+                className="login-button"
+                loading={loading} // Add loading prop to Button
+              >
                 Sign In
               </Button>
             </Form.Item>
