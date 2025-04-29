@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Table, Button, message, Spin, Card, Row, Col, Divider, Switch } from "antd";
+import { Table, Button, message, Spin, Card, Row, Col, Divider, Switch, Image } from "antd";
 import { DatePicker } from "antd";
 import * as XLSX from "xlsx";
 import { format, startOfDay, endOfDay, subDays } from "date-fns";
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
+import axios from "axios";
 import config from "../config";
 import "./OrderSync.css";
 
@@ -11,6 +12,7 @@ const { RangePicker } = DatePicker;
 
 const OrderSync = () => {
   const [orders, setOrders] = useState([]);
+  const [productMappings, setProductMappings] = useState([]); // State for ProductMapping data
   const [dateRange, setDateRange] = useState([null, null]);
   const [loading, setLoading] = useState(false);
   const [totalOrders, setTotalOrders] = useState(0);
@@ -18,6 +20,21 @@ const OrderSync = () => {
   const [isAutomatedSync, setIsAutomatedSync] = useState(false);
   const [initializingAction, setInitializingAction] = useState(null);
   const intervalRef = useRef(null);
+
+  // Fetch ProductMapping data on component mount
+  useEffect(() => {
+    fetchProductMappings();
+  }, []);
+
+  const fetchProductMappings = async () => {
+    try {
+      const response = await axios.get(`${config.apiBaseUrl}/get-previous-products`);
+      setProductMappings(response.data);
+    } catch (error) {
+      message.error("Failed to fetch product mappings");
+      console.error("Error fetching product mappings:", error);
+    }
+  };
 
   useEffect(() => {
     if (orders.length > 0) {
@@ -43,17 +60,14 @@ const OrderSync = () => {
   const fetchOrders = async (isAutomated = false, customDateRange = null) => {
     let effectiveDateRange = customDateRange || dateRange;
 
-    // Log date range for debugging
     console.log(`[${new Date().toISOString()}] fetchOrders: isAutomated=${isAutomated}, effectiveDateRange=`, effectiveDateRange);
 
-    // Date validation for manual fetch
     if (!isAutomated) {
       if (!effectiveDateRange[0] || !effectiveDateRange[1]) {
         message.warning("⚠ Please select both From and To dates.");
         return;
       }
 
-      // Convert moment/dayjs to Date if necessary and validate
       const convertToDate = (value) => {
         if (!value) return null;
         return value instanceof Date ? value : value.toDate ? value.toDate() : new Date(value);
@@ -73,14 +87,12 @@ const OrderSync = () => {
       effectiveDateRange = [fromDate, toDate];
     }
 
-    // Default date range for automated fetch
     if (isAutomated && !effectiveDateRange[0]) {
       const today = new Date();
       const yesterday = subDays(today, 1);
       effectiveDateRange = [startOfDay(yesterday), endOfDay(today)];
     }
 
-    // Stop automated sync on manual search
     if (!isAutomated && isAutomatedSync) {
       setIsAutomatedSync(false);
       if (intervalRef.current) {
@@ -125,28 +137,18 @@ const OrderSync = () => {
 
         setTotalOrders(validOrders.length);
 
-        const processedOrders = validOrders.map((order) => ({
-          key: order.channel_order_id || `TEMP-${Date.now()}`,
-          orderID: order.channel_order_id || `TEMP-${Date.now()}`,
-          order_date: order.created_at || "Unknown Date",
-          customer: {
-            name: order.customer_name || "Unknown",
-            mobile: order.customer_phone || "Unknown",
-            email: order.customer_email || "Unknown",
-          },
-          shipments: Array.isArray(order.shipments)
-            ? order.shipments.map((shipment) => ({
-                courier_name: shipment.sr_courier_name || "N/A",
-                awb_code: shipment.awb || "N/A",
-                status: order.status || "N/A",
-              }))
-            : [],
-          products: Array.isArray(order.products)
+        const processedOrders = validOrders.map((order) => {
+          const enrichedProducts = Array.isArray(order.products)
             ? order.products.map((product) => {
                 const weightMatch = product.channel_sku?.match(/(\d+)(g|kg)/i);
                 const weight = weightMatch
                   ? parseFloat(weightMatch[1]) / (weightMatch[2].toLowerCase() === "kg" ? 1 : 1000)
                   : 0;
+
+                // Map product to ProductMapping using updatedID or another identifier
+                const productMapping = productMappings.find(
+                  (mapping) => mapping.updatedID === product.product_id
+                ) || {};
 
                 return {
                   id: product.id || `TEMP-PROD-${Date.now()}`,
@@ -155,17 +157,39 @@ const OrderSync = () => {
                   name: product.name || "Unknown Item",
                   quantity: product.quantity || 0,
                   weight: weight,
+                  imageUrl: productMapping.imageUrl || "", // Add imageUrl
+                  productLocation: productMapping.productLocation || "Unknown", // Add other fields
+                  productCategory: productMapping.productCategory || "Unknown",
                 };
               })
-            : [],
-          packed_status: order.packed_status || "Not Completed",
-          packed_date: order.packed_date || "Unknown Date",
-          packed_time: order.packed_time || "Unknown Time",
-          packed_person_name: order.packed_person_name || "Unknown",
-          warehouse_out: order.warehouse_out || "Unknown",
-          warehouse_out_date: order.warehouse_out_date || "Unknown Date",
-          warehouse_out_time: order.warehouse_out_time || "Unknown Time",
-        }));
+            : [];
+
+          return {
+            key: order.channel_order_id || `TEMP-${Date.now()}`,
+            orderID: order.channel_order_id || `TEMP-${Date.now()}`,
+            order_date: order.created_at || "Unknown Date",
+            customer: {
+              name: order.customer_name || "Unknown",
+              mobile: order.customer_phone || "Unknown",
+              email: order.customer_email || "Unknown",
+            },
+            shipments: Array.isArray(order.shipments)
+              ? order.shipments.map((shipment) => ({
+                  courier_name: shipment.sr_courier_name || "N/A",
+                  awb_code: shipment.awb || "N/A",
+                  status: order.status || "N/A",
+                }))
+              : [],
+            products: enrichedProducts, // Use enriched products with imageUrl and other fields
+            packed_status: order.packed_status || "Not Completed",
+            packed_date: order.packed_date || "Unknown Date",
+            packed_time: order.packed_time || "Unknown Time",
+            packed_person_name: order.packed_person_name || "Unknown",
+            warehouse_out: order.warehouse_out || "Unknown",
+            warehouse_out_date: order.warehouse_out_date || "Unknown Date",
+            warehouse_out_time: order.warehouse_out_time || "Unknown Time",
+          };
+        });
 
         setOrders(processedOrders);
         if (!isAutomated) {
@@ -207,83 +231,82 @@ const OrderSync = () => {
     let effectiveDateRange = customDateRange || dateRange;
 
     if (effectiveOrders.length === 0) {
-        if (!isAutomated) {
-            message.warning("⚠ No orders to upload.");
-        } else {
-            console.log(`[${new Date().toISOString()}] Automated upload: No orders to upload.`);
-        }
-        return;
+      if (!isAutomated) {
+        message.warning("⚠ No orders to upload.");
+      } else {
+        console.log(`[${new Date().toISOString()}] Automated upload: No orders to upload.`);
+      }
+      return;
     }
 
-    // Validate date range
     if (!effectiveDateRange[0] || !effectiveDateRange[1]) {
-        message.warning("⚠ Please select a valid date range before uploading.");
-        return;
+      message.warning("⚠ Please select a valid date range before uploading.");
+      return;
     }
 
     const convertToDate = (value) => {
-        if (!value) return null;
-        return value instanceof Date ? value : value.toDate ? value.toDate() : new Date(value);
+      if (!value) return null;
+      return value instanceof Date ? value : value.toDate ? value.toDate() : new Date(value);
     };
 
     const fromDate = convertToDate(effectiveDateRange[0]);
     const toDate = convertToDate(effectiveDateRange[1]);
 
     if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
-        message.error("❌ Invalid date range. Please select valid dates.");
-        return;
+      message.error("❌ Invalid date range. Please select valid dates.");
+      return;
     }
 
     setLoading(!isAutomated);
     setInitializingAction(isAutomated ? "automated" : "manual");
     if (!isAutomated) {
-        message.loading({ content: "Uploading orders...", key: "uploading" });
+      message.loading({ content: "Uploading orders...", key: "uploading" });
     }
 
     try {
-        const timeZone = "Asia/Kolkata";
-        const fromDateUTC = format(
-            fromZonedTime(startOfDay(toZonedTime(fromDate, timeZone)), timeZone),
-            "yyyy-MM-dd'T'HH:mm:ss'Z'"
-        );
-        const toDateUTC = format(
-            fromZonedTime(endOfDay(toZonedTime(toDate, timeZone)), timeZone),
-            "yyyy-MM-dd'T'HH:mm:ss'Z'"
-        );
+      const timeZone = "Asia/Kolkata";
+      const fromDateUTC = format(
+        fromZonedTime(startOfDay(toZonedTime(fromDate, timeZone)), timeZone),
+        "yyyy-MM-dd'T'HH:mm:ss'Z'"
+      );
+      const toDateUTC = format(
+        fromZonedTime(endOfDay(toZonedTime(toDate, timeZone)), timeZone),
+        "yyyy-MM-dd'T'HH:mm:ss'Z'"
+      );
 
-        const response = await fetch(`${config.apiBaseUrl}/sync-orders`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ from: fromDateUTC, to: toDateUTC, orders: effectiveOrders }),
+      const response = await fetch(`${config.apiBaseUrl}/sync-orders`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ from: fromDateUTC, to: toDateUTC, orders: effectiveOrders }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Server error: ${response.status} - ${errorText}`);
+      }
+
+      const result = await response.json();
+      if (!isAutomated) {
+        message.success({
+          content: `✅ ${result.insertedCount || 0} orders uploaded successfully!`,
+          key: "uploading",
+          duration: 3,
         });
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Server error: ${response.status} - ${errorText}`);
-        }
-
-        const result = await response.json();
-        if (!isAutomated) {
-            message.success({
-                content: `✅ ${result.insertedCount || 0} orders uploaded successfully!`,
-                key: "uploading",
-                duration: 3,
-            });
-        } else {
-            console.log(`[${new Date().toISOString()}] Automated upload: ${result.insertedCount || 0} orders uploaded successfully.`);
-        }
+      } else {
+        console.log(`[${new Date().toISOString()}] Automated upload: ${result.insertedCount || 0} orders uploaded successfully.`);
+      }
     } catch (error) {
-        console.error("Error uploading orders:", error);
-        if (!isAutomated) {
-            message.error(`❌ Failed to upload orders: ${error.message}`);
-        } else {
-            console.error(`[${new Date().toISOString()}] Automated upload error:`, error.message);
-        }
+      console.error("Error uploading orders:", error);
+      if (!isAutomated) {
+        message.error(`❌ Failed to upload orders: ${error.message}`);
+      } else {
+        console.error(`[${new Date().toISOString()}] Automated upload error:`, error.message);
+      }
     } finally {
-        setLoading(false);
-        setInitializingAction(null);
+      setLoading(false);
+      setInitializingAction(null);
     }
-};
+  };
 
   const startAutomatedSync = () => {
     const sync = async () => {
@@ -320,6 +343,9 @@ const OrderSync = () => {
         productName: product.name,
         quantity: product.quantity,
         weight: product.weight,
+        imageUrl: product.imageUrl, // Include imageUrl in Excel
+        productLocation: product.productLocation,
+        productCategory: product.productCategory,
       }))
     );
 
@@ -402,10 +428,25 @@ const OrderSync = () => {
                 <ul>
                   {record.products.map((product, index) => (
                     <li key={index}>
+                      {product.imageUrl ? (
+                        <Image
+                          src={product.imageUrl}
+                          alt={product.name}
+                          width={50}
+                          height={50}
+                          style={{ objectFit: "cover", marginBottom: "10px" }}
+                          preview={true}
+                          fallback="https://via.placeholder.com/50"
+                        />
+                      ) : (
+                        <p>No Image</p>
+                      )}
                       <p><strong>Name:</strong> {product.name}</p>
                       <p><strong>SKU:</strong> {product.sku}</p>
                       <p><strong>Quantity:</strong> {product.quantity}</p>
                       <p><strong>Weight:</strong> {product.weight} kg</p>
+                      <p><strong>Location:</strong> {product.productLocation}</p>
+                      <p><strong>Category:</strong> {product.productCategory}</p>
                       {index < record.products.length - 1 && <Divider />}
                     </li>
                   ))}
