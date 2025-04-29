@@ -8,6 +8,7 @@ import {
   Table,
   Checkbox,
   Tag,
+  Image,
 } from "antd";
 import { CheckCircleOutlined, CloseCircleOutlined } from "@ant-design/icons";
 import axios from "axios";
@@ -114,6 +115,22 @@ const PickingPage = ({ orders, userName, refetch }) => {
     setStartTime(null);
   };
 
+  // Sort products by productLocation in ascending order (e.g., 1a to 10a)
+  const sortedProducts = selectedOrder
+    ? [...selectedOrder.products].sort((a, b) => {
+        const locA = a.productLocation?.toLowerCase() || "";
+        const locB = b.productLocation?.toLowerCase() || "";
+        const numA = parseInt(locA.replace(/\D/g, "")) || 0;
+        const numB = parseInt(locB.replace(/\D/g, "")) || 0;
+        const charA = locA.replace(/\d/g, "");
+        const charB = locB.replace(/\d/g, "");
+        if (charA === charB) {
+          return numA - numB; // Sort by number if letters are the same
+        }
+        return charA.localeCompare(charB); // Otherwise sort by letter
+      })
+    : [];
+
   return (
     <div className="picking-page-container">
       {!selectedOrder ? (
@@ -148,13 +165,16 @@ const PickingPage = ({ orders, userName, refetch }) => {
             </div>
 
             <Table
-              dataSource={selectedOrder.products.map((product, index) => ({
+              dataSource={sortedProducts.map((product, index) => ({
                 key: index,
                 name: product.name,
                 sku: product.sku || "N/A",
                 quantity: product.quantity,
                 picked: pickedItems[index],
                 index,
+                imageUrl: product.imageUrl || "",
+                productLocation: product.productLocation || "Unknown",
+                productCategory: product.productCategory || "Unknown",
               }))}
               columns={[
                 {
@@ -169,6 +189,23 @@ const PickingPage = ({ orders, userName, refetch }) => {
                   width: 50,
                 },
                 {
+                  title: "Image",
+                  dataIndex: "imageUrl",
+                  render: (url) => (
+                    <Image
+                      src={url || "https://via.placeholder.com/50"}
+                      alt="Product"
+                      width={50}
+                      height={50}
+                      style={{ objectFit: "cover" }}
+                      preview={true}
+                      fallback="https://via.placeholder.com/50"
+                    />
+                  ),
+                  width: 60,
+                },
+               
+                {
                   title: "Product Name",
                   dataIndex: "name",
                   render: (text, record) => (
@@ -182,7 +219,7 @@ const PickingPage = ({ orders, userName, refetch }) => {
                   dataIndex: "sku",
                   render: (sku) => (
                     <Tag
-                      color={sku && sku.toLowerCase().startsWith("1kg") ? "red" : "blue"} // Red for SKUs starting with "1kg", blue for others
+                      color={sku && sku.toLowerCase().startsWith("1kg") ? "red" : "blue"}
                       style={{ fontWeight: "bold", textAlign: "center" }}
                     >
                       {sku}
@@ -194,10 +231,28 @@ const PickingPage = ({ orders, userName, refetch }) => {
                   dataIndex: "quantity",
                   render: (qty) => (
                     <Tag
-                      color={qty > 1 ? "red" : "blue"} // Red for qty > 1, blue for qty = 1
+                      color={qty > 1 ? "red" : "blue"}
                       style={{ fontWeight: "bold", textAlign: "center" }}
                     >
                       {qty}
+                    </Tag>
+                  ),
+                },
+                {
+                  title: "Location",
+                  dataIndex: "productLocation",
+                  render: (loc) => (
+                    <Tag color="cyan" style={{ fontWeight: "bold" }}>
+                      {loc}
+                    </Tag>
+                  ),
+                },
+                {
+                  title: "Category",
+                  dataIndex: "productCategory",
+                  render: (cat) => (
+                    <Tag color="purple" style={{ fontWeight: "bold" }}>
+                      {cat}
                     </Tag>
                   ),
                 },
