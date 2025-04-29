@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Table, Input, Row, Col, Button, Tabs, Checkbox, Drawer } from "antd";
 import { Resizable } from "react-resizable";
-import { Triangle } from "react-loader-spinner"; // Import the Triangle loader
 import moment from "moment";
 import { Calendar } from "primereact/calendar";
 import "primereact/resources/themes/saga-blue/theme.css";
@@ -44,17 +43,14 @@ const OrdersPage = ({ orders = [], columnWidths, handleResize }) => {
   const [activeTab, setActiveTab] = useState("all");
   const [shiprocketStatuses, setShiprocketStatuses] = useState([]);
   const [isFilterModalVisible, setIsFilterModalVisible] = useState(false);
-  const [loading, setLoading] = useState(true); // Add loading state
 
   useEffect(() => {
-    setLoading(true); // Start loading
-    // Simulate processing orders (e.g., fetching or filtering)
+   
     orders.forEach((order, index) => {
-      // Existing logic (if any)
+    
     });
-
-    applyFilters({}); // Apply initial filters
-    setLoading(false); // Stop loading after filtering
+   
+    applyFilters({});
   }, [orders]);
 
   const applyFilters = ({
@@ -64,6 +60,8 @@ const OrdersPage = ({ orders = [], columnWidths, handleResize }) => {
     tab = activeTab,
   } = {}) => {
     let filtered = orders ? [...orders] : [];
+
+  
 
     // Apply search filter
     if (filtered.length && (search !== undefined ? search : searchText)) {
@@ -78,17 +76,24 @@ const OrdersPage = ({ orders = [], columnWidths, handleResize }) => {
           (mobile || "").toLowerCase().includes(value)
         );
       });
+      
     }
 
     // Apply date range filter
     const activeDateRange = newDateRange !== undefined ? newDateRange : dateRange;
     if (filtered.length && activeDateRange && activeDateRange[0] && activeDateRange[1]) {
-      const startDate = moment(activeDateRange[0]).utcOffset(0, true).startOf("day");
+      const startDate = moment(activeDateRange[0]).utcOffset(0, true).startOf("day"); // Force UTC without offset shift
       const endDate = moment(activeDateRange[1]).utcOffset(0, true).endOf("day");
+    //  console.log(`Date range filter: Start ${startDate.format("YYYY-MM-DD HH:mm:ss")} to End ${endDate.format("YYYY-MM-DD HH:mm:ss")} (UTC)`);
       filtered = filtered.filter((order) => {
         const orderDate = moment(order.order_date).utc();
+        const orderDateDay = orderDate.format("YYYY-MM-DD");
+   
         return orderDate.isBetween(startDate, endDate, null, "[]");
       });
+     
+    } else {
+     
     }
 
     // Apply tab-specific filters
@@ -105,6 +110,7 @@ const OrdersPage = ({ orders = [], columnWidths, handleResize }) => {
           activeStatuses.includes(order.shipments?.[0]?.status || "N/A")
         );
       }
+    //  console.log(`After tab-specific filter (${tab}): ${filtered.length}`);
     }
 
     setFilteredOrders(filtered);
@@ -119,6 +125,7 @@ const OrdersPage = ({ orders = [], columnWidths, handleResize }) => {
     const newDateRange = e.value;
     setDateRange(newDateRange);
     applyFilters({ dateRange: newDateRange });
+   // console.log("Selected Date Range:", newDateRange ? [moment(newDateRange[0]).format("YYYY-MM-DD"), moment(newDateRange[1]).format("YYYY-MM-DD")] : "No range selected");
   };
 
   const handleTabChange = (key) => {
@@ -326,6 +333,31 @@ const OrdersPage = ({ orders = [], columnWidths, handleResize }) => {
               width: 100,
               align: "center",
             },
+            {
+              title: "Image",
+              dataIndex: "imageUrl",
+              key: "imageUrl",
+              width: 100,
+              render: (imageUrl) => (
+                <img
+                  src={imageUrl}
+                  alt="Product"
+                  style={{ width: "50px", height: "50px" }}
+                />
+              ),
+            },
+            {
+              title: "Location",
+              dataIndex: "productLocation",
+              key: "productLocation",
+              width: 150,
+            },
+            {
+              title: "Category",
+              dataIndex: "productCategory",
+              key: "productCategory",
+              width: 150,
+            },
           ]}
           dataSource={record.products || []}
           rowKey="id"
@@ -414,29 +446,6 @@ const OrdersPage = ({ orders = [], columnWidths, handleResize }) => {
     value: status,
   })) : [];
 
-  // Render loading screen if loading is true
-  if (loading) {
-    return (
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          height: "100vh",
-          background: "#f0f2f5",
-        }}
-      >
-        <Triangle
-          visible={true}
-          height="80"
-          width="80"
-          color="#22B8CF"
-          ariaLabel="triangle-loading"
-        />
-      </div>
-    );
-  }
-
   return (
     <div style={{ padding: "10px" }}>
       <style>
@@ -450,11 +459,11 @@ const OrdersPage = ({ orders = [], columnWidths, handleResize }) => {
         className="order-tabs"
         activeKey={activeTab}
         onChange={handleTabChange}
-        style={{
-          marginBottom: "20px",
-          background: "#fff",
-          padding: "14px",
-          borderRadius: "15px",
+        style={{ 
+          marginBottom: "20px", 
+          background: "#fff", 
+          padding: "14px", 
+          borderRadius: "15px" 
         }}
         tabBarExtraContent={
           activeTab === "shiprocket" && (
