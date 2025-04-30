@@ -115,19 +115,40 @@ const PickingPage = ({ orders, userName, refetch }) => {
     setStartTime(null);
   };
 
-  // Sort products by productLocation in ascending order (e.g., 1a to 10a)
-  const sortedProducts = selectedOrder
+  // // Sort products by productLocation in ascending order (e.g., 1a to 10a)
+  // const sortedProducts = selectedOrder
+  //   ? [...selectedOrder.products].sort((a, b) => {
+  //       const locA = a.productLocation?.toLowerCase() || "";
+  //       const locB = b.productLocation?.toLowerCase() || "";
+  //       const numA = parseInt(locA.replace(/\D/g, "")) || 0;
+  //       const numB = parseInt(locB.replace(/\D/g, "")) || 0;
+  //       const charA = locA.replace(/\d/g, "");
+  //       const charB = locB.replace(/\d/g, "");
+  //       if (charA === charB) {
+  //         return numA - numB; // Sort by number if letters are the same
+  //       }
+  //       return charA.localeCompare(charB); // Otherwise sort by letter
+  //     })
+  //   : [];
+
+   const sortedProducts = selectedOrder
     ? [...selectedOrder.products].sort((a, b) => {
-        const locA = a.productLocation?.toLowerCase() || "";
-        const locB = b.productLocation?.toLowerCase() || "";
-        const numA = parseInt(locA.replace(/\D/g, "")) || 0;
-        const numB = parseInt(locB.replace(/\D/g, "")) || 0;
-        const charA = locA.replace(/\d/g, "");
-        const charB = locB.replace(/\d/g, "");
-        if (charA === charB) {
-          return numA - numB; // Sort by number if letters are the same
+        const parseLocation = (loc) => {
+          const cleaned = (loc || "").toLowerCase().trim();
+          const match = cleaned.match(/^(\d+)([a-z]*)$/);
+          if (!match) return { rack: 0, section: "" };
+          return {
+            rack: parseInt(match[1], 10),
+            section: match[2] || "",
+          };
+        };
+        const aLoc = parseLocation(a.productLocation);
+        const bLoc = parseLocation(b.productLocation);
+
+        if (aLoc.rack === bLoc.rack) {
+          return aLoc.section.localeCompare(bLoc.section);
         }
-        return charA.localeCompare(charB); // Otherwise sort by letter
+        return aLoc.rack - bLoc.rack;
       })
     : [];
 
