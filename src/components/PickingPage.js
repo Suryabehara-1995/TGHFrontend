@@ -76,7 +76,7 @@ const PickingPage = ({ orders, userName, refetch }) => {
         {
           orderID,
           picked_person_name: userName,
-          picked_date: new Date(),
+          picked_date: new Date(), // ✅ send as Date object
           picked_time: moment().format("HH:mm:ss"),
           pickingActivity: {
             username: userName,
@@ -115,23 +115,7 @@ const PickingPage = ({ orders, userName, refetch }) => {
     setStartTime(null);
   };
 
-  // // Sort products by productLocation in ascending order (e.g., 1a to 10a)
-  // const sortedProducts = selectedOrder
-  //   ? [...selectedOrder.products].sort((a, b) => {
-  //       const locA = a.productLocation?.toLowerCase() || "";
-  //       const locB = b.productLocation?.toLowerCase() || "";
-  //       const numA = parseInt(locA.replace(/\D/g, "")) || 0;
-  //       const numB = parseInt(locB.replace(/\D/g, "")) || 0;
-  //       const charA = locA.replace(/\d/g, "");
-  //       const charB = locB.replace(/\d/g, "");
-  //       if (charA === charB) {
-  //         return numA - numB; // Sort by number if letters are the same
-  //       }
-  //       return charA.localeCompare(charB); // Otherwise sort by letter
-  //     })
-  //   : [];
-
-   const sortedProducts = selectedOrder
+  const sortedProducts = selectedOrder
     ? [...selectedOrder.products].sort((a, b) => {
         const parseLocation = (loc) => {
           const cleaned = (loc || "").toLowerCase().trim();
@@ -156,11 +140,9 @@ const PickingPage = ({ orders, userName, refetch }) => {
     <div className="picking-page-container">
       {!selectedOrder ? (
         <div className="search-mode">
-          <Title level={2} className="search-title">
-            Picking List
-          </Title>
+          <Title level={2} className="search-title">Picking List</Title>
           <Search
-            placeholder="Enter Order ID (e.g., S49640 or WH/OUT/15673-S49640#0-bfdde)"
+            placeholder="Enter Order ID (e.g., S49640)"
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
             onSearch={handleSearch}
@@ -172,9 +154,7 @@ const PickingPage = ({ orders, userName, refetch }) => {
       ) : (
         <Spin spinning={loading}>
           <div className="order-view">
-            <Button type="link" onClick={handleBack}>
-              ← Back
-            </Button>
+            <Button type="link" onClick={handleBack}>← Back</Button>
             <Title level={3}>{selectedOrder.orderID}</Title>
             <Text strong>Customer:</Text> {selectedOrder.customer.name} <br />
             <Text strong>Email:</Text> {selectedOrder.customer.email}
@@ -225,7 +205,6 @@ const PickingPage = ({ orders, userName, refetch }) => {
                   ),
                   width: 60,
                 },
-               
                 {
                   title: "Product Name",
                   dataIndex: "name",
@@ -241,7 +220,7 @@ const PickingPage = ({ orders, userName, refetch }) => {
                   render: (sku) => (
                     <Tag
                       color={sku && sku.toLowerCase().startsWith("1kg") ? "red" : "blue"}
-                      style={{ fontWeight: "bold", textAlign: "center" }}
+                      style={{ fontWeight: "bold" }}
                     >
                       {sku}
                     </Tag>
@@ -253,7 +232,7 @@ const PickingPage = ({ orders, userName, refetch }) => {
                   render: (qty) => (
                     <Tag
                       color={qty > 1 ? "red" : "blue"}
-                      style={{ fontWeight: "bold", textAlign: "center" }}
+                      style={{ fontWeight: "bold" }}
                     >
                       {qty}
                     </Tag>
