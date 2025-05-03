@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from "react";
-import { Table, Input, Row, Col, Button, Tabs, Checkbox, Drawer } from "antd";
+import { Table, Input, Row, Col, Button, Tabs, Checkbox, Drawer, Select } from "antd";
 import { Resizable } from "react-resizable";
 import moment from "moment";
 import { Calendar } from "primereact/calendar";
 import "primereact/resources/themes/saga-blue/theme.css";
 import "primereact/resources/primereact.min.css";
 import "primeicons/primeicons.css";
-import { ShoppingOutlined, FilterOutlined } from "@ant-design/icons";
+import { ShoppingOutlined, FilterOutlined, DownloadOutlined } from "@ant-design/icons";
+import * as XLSX from "xlsx";
 
 const { Search } = Input;
 const { TabPane } = Tabs;
+const { Option } = Select;
 
 const ResizableTitle = (props) => {
   const { onResize, width, ...restProps } = props;
@@ -43,13 +45,10 @@ const OrdersPage = ({ orders = [], columnWidths, handleResize }) => {
   const [activeTab, setActiveTab] = useState("all");
   const [shiprocketStatuses, setShiprocketStatuses] = useState([]);
   const [isFilterModalVisible, setIsFilterModalVisible] = useState(false);
+  const [packingStatusFilter, setPackingStatusFilter] = useState(null);
+  const [sortOrder, setSortOrder] = useState(null);
 
   useEffect(() => {
-   
-    orders.forEach((order, index) => {
-    
-    });
-   
     applyFilters({});
   }, [orders]);
 
@@ -58,10 +57,10 @@ const OrdersPage = ({ orders = [], columnWidths, handleResize }) => {
     dateRange: newDateRange,
     shiprocketStatuses: statuses,
     tab = activeTab,
+    packingStatus = packingStatusFilter,
+    sort = sortOrder,
   } = {}) => {
     let filtered = orders ? [...orders] : [];
-
-  
 
     // Apply search filter
     if (filtered.length && (search !== undefined ? search : searchText)) {
@@ -76,24 +75,26 @@ const OrdersPage = ({ orders = [], columnWidths, handleResize }) => {
           (mobile || "").toLowerCase().includes(value)
         );
       });
-      
     }
 
     // Apply date range filter
     const activeDateRange = newDateRange !== undefined ? newDateRange : dateRange;
     if (filtered.length && activeDateRange && activeDateRange[0] && activeDateRange[1]) {
-      const startDate = moment(activeDateRange[0]).utcOffset(0, true).startOf("day"); // Force UTC without offset shift
+      const startDate = moment(activeDateRange[0]).utcOffset(0, true).startOf("day");
       const endDate = moment(activeDateRange[1]).utcOffset(0, true).endOf("day");
-    //  console.log(`Date range filter: Start ${startDate.format("YYYY-MM-DD HH:mm:ss")} to End ${endDate.format("YYYY-MM-DD HH:mm:ss")} (UTC)`);
       filtered = filtered.filter((order) => {
         const orderDate = moment(order.order_date).utc();
-        const orderDateDay = orderDate.format("YYYY-MM-DD");
-   
         return orderDate.isBetween(startDate, endDate, null, "[]");
       });
-     
-    } else {
-     
+    }
+
+    // Apply packing status filter
+    if (filtered.length && packingStatus) {
+      filtered = filtered.filter((order) => 
+        packingStatus === "Completed" 
+          ? order.packed_status === "Completed"
+          : order.packed_status !== "Completed"
+      );
     }
 
     // Apply tab-specific filters
@@ -110,7 +111,18 @@ const OrdersPage = ({ orders = [], columnWidths, handleResize }) => {
           activeStatuses.includes(order.shipments?.[0]?.status || "N/A")
         );
       }
-    //  console.log(`After tab-specific filter (${tab}): ${filtered.length}`);
+    }
+
+    // Apply sorting
+    if (filtered.length && sort) {
+      filtered.sort((a, b) => {
+        if (sort === "packed_asc") {
+          return a.packed_status.localeCompare(b.packed_status);
+        } else if (sort === "packed_desc") {
+          return b.packed_status.localeCompare(a.packed_status);
+        }
+        return 0;
+      });
     }
 
     setFilteredOrders(filtered);
@@ -125,7 +137,6 @@ const OrdersPage = ({ orders = [], columnWidths, handleResize }) => {
     const newDateRange = e.value;
     setDateRange(newDateRange);
     applyFilters({ dateRange: newDateRange });
-   // console.log("Selected Date Range:", newDateRange ? [moment(newDateRange[0]).format("YYYY-MM-DD"), moment(newDateRange[1]).format("YYYY-MM-DD")] : "No range selected");
   };
 
   const handleTabChange = (key) => {
@@ -133,7 +144,8 @@ const OrdersPage = ({ orders = [], columnWidths, handleResize }) => {
     setSearchText("");
     setDateRange(null);
     setShiprocketStatuses([]);
-    applyFilters({ tab: key, dateRange: null, shiprocketStatuses: [] });
+    setPackingStatusFilter(null);
+    applyFilters({ tab: key, dateRange: null, shiprocketStatuses: [], packingStatus: null });
   };
 
   const handleShiprocketStatusChange = (checkedValues) => {
@@ -141,11 +153,49 @@ const OrdersPage = ({ orders = [], columnWidths, handleResize }) => {
     applyFilters({ shiprocketStatuses: checkedValues });
   };
 
+  const handlePackingStatusChange = (value) => {
+    setPackingStatusFilter(value);
+    applyFilters({ packingStatus: value });
+  };
+
+  const handleSortChange = (value) => {
+    setSortOrder(value);
+    applyFilters({ sort: value });
+  };
+
   const handleShowAllOrders = () => {
     setSearchText("");
     setDateRange(null);
     setShiprocketStatuses([]);
-    applyFilters({ dateRange: null, shiprocketStatuses: [] });
+    setPackingStatusFilter(null);
+    setSortOrder(null);
+    applyFilters({ dateRange: null, shiprocketStatuses: [], packingStatus: null, sort: null });
+  };
+
+  const handleDownloadExcel = () => {
+    if (!filteredOrders.length) return;
+
+    const excelData = filteredOrders.map((order) => ({
+      "Order ID": order.orderID,
+      "Customer Name": order.customer?.name || "N/A",
+      "Customer Mobile": order.customer?.mobile || "N/A",
+      "Customer Email": order.customer?.email || "N/A",
+      "Courier": order.shipments?.[0]?.courier_name || "N/A",
+      "AWB Code": order.shipments?.[0]?.awb_code || "N/A",
+      "ShipRocket Status": order.shipments?.[0]?.status || "N/A",
+      "Packing Status": order.packed_status || "N/A",
+      "Order Date": order.order_date ? moment(order.order_date).format("DD-MM-YYYY") : "N/A",
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(excelData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Orders");
+    
+    const fileName = dateRange && dateRange[0] && dateRange[1]
+      ? `Orders_${moment(dateRange[0]).format("YYYYMMDD")}_${moment(dateRange[1]).format("YYYYMMDD")}.xlsx`
+      : "Orders.xlsx";
+    
+    XLSX.writeFile(workbook, fileName);
   };
 
   const columns = [
@@ -536,7 +586,7 @@ const OrdersPage = ({ orders = [], columnWidths, handleResize }) => {
               : "ShipRocket Status"}
             <span style={{ marginLeft: "4px" }}>
               {filteredOrders.length}
-              {dateRange && dateRange[0] && dateRange[1] ? `(Filtered)` : ""}
+              {(dateRange && dateRange[0] && dateRange[1]) || packingStatusFilter ? `(Filtered)` : ""}
             </span>
           </h3>
         </Col>
@@ -559,6 +609,35 @@ const OrdersPage = ({ orders = [], columnWidths, handleResize }) => {
             showIcon
             style={{ marginRight: "10px" }}
           />
+          <Select
+            placeholder="Filter Packing Status"
+            style={{ width: 180, marginRight: "10px" }}
+            onChange={handlePackingStatusChange}
+            value={packingStatusFilter}
+            allowClear
+          >
+            <Option value="Completed">Completed</Option>
+            <Option value="Not Completed">Not Completed</Option>
+          </Select>
+          <Select
+            placeholder="Sort by Packing Status"
+            style={{ width: 180, marginRight: "10px" }}
+            onChange={handleSortChange}
+            value={sortOrder}
+            allowClear
+          >
+            <Option value="packed_asc">Packed Status (A-Z)</Option>
+            <Option value="packed_desc">Packed Status (Z-A)</Option>
+          </Select>
+          {dateRange && dateRange[0] && dateRange[1] && (
+            <Button
+              icon={<DownloadOutlined />}
+              onClick={handleDownloadExcel}
+              style={{ marginRight: "10px" }}
+            >
+              Download Excel
+            </Button>
+          )}
           <span style={{ marginLeft: "10px" }}>
             Today's Orders: {todayOrdersCount}
           </span>
