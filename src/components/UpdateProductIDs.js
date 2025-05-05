@@ -63,6 +63,18 @@ const UpdateProductIds = () => {
     XLSX.writeFile(workbook, "sample_product_upload.xlsx");
   };
 
+  const downloadAllProductsExcel = () => {
+    if (previousProducts.length === 0) {
+      messageApi.warning("No products available to download.");
+      return;
+    }
+
+    const worksheet = XLSX.utils.json_to_sheet(previousProducts);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "All Products");
+    XLSX.writeFile(workbook, "all_products.xlsx");
+  };
+
   const handleFileUpload = (file) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -430,7 +442,7 @@ const UpdateProductIds = () => {
   ];
 
   return (
-    <div style={{ padding: "20px",  margin: "0 auto" }}>
+    <div style={{ padding: "20px", margin: "0 auto" }}>
       {contextHolder}
       <h1 style={{ fontSize: "24px", fontWeight: "bold", marginBottom: "20px" }}>
         Product Master
@@ -452,6 +464,13 @@ const UpdateProductIds = () => {
               style={{ marginLeft: "10px" }}
             >
               Download Sample Excel
+            </Button>
+            <Button
+              icon={<DownloadOutlined />}
+              onClick={downloadAllProductsExcel}
+              style={{ marginLeft: "10px" }}
+            >
+              Download All Products
             </Button>
           </Space>
         }
