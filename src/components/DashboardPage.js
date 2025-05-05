@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { Card, Row, Col, Badge, Button } from "antd";
 import { LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, Legend } from "recharts";
-import { FaChartBar, FaCalendarDay, FaCalendarMinus, FaPauseCircle, FaCheckCircle, FaSun, FaMoon, FaTruck } from "react-icons/fa";
+import { FaChartBar, FaCalendarDay, FaCalendarMinus, FaPauseCircle, FaCheckCircle, FaSun, FaMoon, FaTruck, FaUser, FaHourglassHalf } from "react-icons/fa";
 import moment from "moment";
 import { Triangle } from "react-loader-spinner";
 import Cookies from "js-cookie";
@@ -13,6 +13,7 @@ import config from "../config";
 const DashboardPage = () => {
   const [orderCounts, setOrderCounts] = useState({
     today: 0,
+    todayCompleted: 0,
     yesterday: 0,
     total: 0,
     onHold: 0,
@@ -80,14 +81,16 @@ const DashboardPage = () => {
     const counts = orders.reduce(
       (acc, order) => {
         const orderDate = moment(order.order_date);
-        if (orderDate.isSame(today, "day")) acc.today += 1;
-        else if (orderDate.isSame(yesterday, "day")) acc.yesterday += 1;
+        if (orderDate.isSame(today, "day")) {
+          acc.today += 1;
+          if (order.packed_status === "Completed") acc.todayCompleted += 1;
+        } else if (orderDate.isSame(yesterday, "day")) acc.yesterday += 1;
         if (order.packed_status === "Hold") acc.onHold += 1;
         if (order.packed_status === "Completed") acc.completed += 1;
         acc.total += 1;
         return acc;
       },
-      { today: 0, yesterday: 0, total: 0, onHold: 0, completed: 0 }
+      { today: 0, todayCompleted: 0, yesterday: 0, total: 0, onHold: 0, completed: 0 }
     );
 
     setOrderCounts(counts);
@@ -101,19 +104,24 @@ const DashboardPage = () => {
     }
     setDailyOrders(dailyCounts);
 
-    const packedData = orders.reduce((acc, order) => {
+    // Filter for today's orders only
+    const todayOrders = orders.filter((order) => moment(order.order_date).isSame(today, "day"));
+    const packedData = todayOrders.reduce((acc, order) => {
       const personName =
-        order.packed_person_name?.trim() === "Unknown" || !order.packed_person_name?.trim()
-          ? "Pending Orders"
-          : order.packed_person_name.trim();
-      acc[personName] = (acc[personName] || 0) + 1;
+        order.packed_person_name?.trim() && order.packed_person_name?.trim() !== "Unknown"
+          ? order.packed_person_name.trim()
+          : null;
+      if (personName) {
+        acc[personName] = (acc[personName] || 0) + 1;
+      } else {
+        acc["Pending Orders"] = (acc["Pending Orders"] || 0) + 1;
+      }
       return acc;
     }, {});
 
     const packedPersonsArray = Object.entries(packedData).map(([name, count]) => ({ name, count }));
     setPackedPersons(packedPersonsArray);
 
-    const todayOrders = orders.filter((order) => moment(order.order_date).isSame(today, "day"));
     const courierData = todayOrders.reduce((acc, order) => {
       if (order.shipments && order.shipments.length > 0) {
         const uniqueCouriers = [
@@ -232,7 +240,7 @@ const DashboardPage = () => {
             </div>
             <h3 style={{ fontSize: "12px", color: currentTheme.textSecondary, marginBottom: "4px" }}>Today Orders</h3>
             <p style={{ fontSize: "20px", fontWeight: "bold", color: currentTheme.textPrimary, marginBottom: "4px" }}>
-              {orderCounts.today}
+              {orderCounts.today} <span style={{ fontSize: "14px", color: "#22C55E" }}>({orderCounts.todayCompleted} Completed)</span>
             </p>
             <p style={{ fontSize: "10px", color: orderCounts.today >= orderCounts.yesterday ? "#22C55E" : "#FF6B6B" }}>
               {percentageChange(orderCounts.today, orderCounts.yesterday)} since yesterday
@@ -431,26 +439,49 @@ const DashboardPage = () => {
               color: currentTheme.textPrimary,
             }}
           >
-            <h3 style={{ fontSize: "14px", color: currentTheme.textPrimary, fontWeight: "600", marginBottom: "6px" }}>
-              Users
-            </h3>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+              <h3 style={{ fontSize: "14px", fontWeight: "600", color: currentTheme.textPrimary, margin: 0 }}>
+                Today's Packing Users
+              </h3>
+              <Badge
+                color="#22B8CF"
+                text="Today"
+                style={{ color: currentTheme.textSecondary, fontSize: "10px", fontWeight: "500", background: currentTheme.buttonBackground, padding: "2px 4px", borderRadius: "4px" }}
+              />
+            </div>
             <ul style={{ listStyleType: "none", padding: 0 }}>
-              {packedPersons.map((person) => (
-                <li
-                  key={person.name}
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    padding: "6px 0",
-                    borderBottom: `1px solid ${currentTheme.borderColor}`,
-                  }}
-                >
-                  <span style={{ fontSize: "12px", color: currentTheme.textSecondary }}>{person.name}</span>
-                  <span style={{ fontSize: "12px", fontWeight: "bold", color: "#22B8CF" }}>
-                    {person.count}
-                  </span>
+              {packedPersons.length > 0 ? (
+                packedPersons.map((person) => (
+                  <li
+                    key={person.name}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      padding: "8px 0",
+                      borderBottom: `1px solid ${currentTheme.borderColor}`,
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center" }}>
+                      {person.name === "Pending Orders" ? (
+                        <FaHourglassHalf size={16} color="#FF6B6B" style={{ marginRight: "8px" }} />
+                      ) : (
+                        <FaUser size={16} color="#22B8CF" style={{ marginRight: "8px" }} />
+                      )}
+                      <span style={{ fontSize: "12px", color: currentTheme.textSecondary }}>
+                        {person.name}
+                      </span>
+                    </div>
+                    <span style={{ fontSize: "12px", fontWeight: "bold", color: "#22B8CF" }}>
+                      {person.count}
+                    </span>
+                  </li>
+                ))
+              ) : (
+                <li style={{ fontSize: "12px", color: currentTheme.textSecondary, textAlign: "center", padding: "8px 0" }}>
+                  No packing data for today
                 </li>
-              ))}
+              )}
             </ul>
           </Card>
         </Col>
