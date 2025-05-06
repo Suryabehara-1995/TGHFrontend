@@ -29,7 +29,6 @@ import {
 import config from "../config"; // Import the config file
 import Cookies from "js-cookie"; // Import js-cookie to match PickingPage.js
 
-
 const { Title, Text } = Typography;
 const { Search } = Input;
 const { Option } = Select;
@@ -155,7 +154,8 @@ const UserPerformancePage = () => {
           }, {});
           return Object.values(newData).filter(
             (activity) =>
-              new Date(activity.startTime) >= today && new Date(activity.startTime) < tomorrow
+              new Date(activity.startTime) >= new Date().setHours(0, 0, 0, 0) &&
+              new Date(activity.startTime) < new Date(new Date().setDate(new Date().getDate() + 1)).setHours(0, 0, 0, 0)
           );
         });
       } else if (updatedData.type === "orders") {
@@ -166,8 +166,8 @@ const UserPerformancePage = () => {
           }, {});
           return Object.values(newData).filter(
             (order) =>
-              new Date(order.createdAt || order.startTime) >= today &&
-              new Date(order.createdAt || order.startTime) < tomorrow
+              new Date(order.createdAt || order.startTime) >= new Date().setHours(0, 0, 0, 0) &&
+              new Date(order.createdAt || order.startTime) < new Date(new Date().setDate(new Date().getDate() + 1)).setHours(0, 0, 0, 0)
           );
         });
       } else if (updatedData.type === "overridden") {
@@ -405,7 +405,7 @@ const UserPerformancePage = () => {
 
   // Calculate order stats
   const getOrderStats = () => {
-    const totalOrders = pickedOrders.length;
+    const totalOrders = orders.length;
     const pickedOrders = orders.filter(
       (order) => order.picked_status && order.picked_status !== "Not Picked"
     ).length;
@@ -501,16 +501,16 @@ const UserPerformancePage = () => {
           <Col span={18}>
             {selectedPicker ? (
               <Card title={`Picked Orders by ${selectedPicker} (Today)`}>
-                <Row gutter={16} style={{ marginBottom: "16px" }}>                                
+                <Row gutter={16} style={{ marginBottom: "16px" }}>
                   <Col span={8}>
-                  <Statistic
-                title="Picked Orders"
-                value={
-                  pickingActivities.filter(
-                    (activity) => activity.username === selectedPicker
-                  ).length
-                }
-              />
+                    <Statistic
+                      title="Picked Orders"
+                      value={
+                        pickingActivities.filter(
+                          (activity) => activity.username === selectedPicker
+                        ).length
+                      }
+                    />
                   </Col>
                 </Row>
                 <Table
@@ -545,141 +545,161 @@ const UserPerformancePage = () => {
           </Col>
         </Row>
 
-     {/* Overridden Orders Section */}
-<Row gutter={16} style={{ marginBottom: "20px" }}>
-  <Col span={6}>
-    <Card title="Users with Overridden Orders (Today)" style={{ height: "100%" }}>
-      <Row gutter={[16, 16]}>
-        {Object.keys(
-          overriddenOrders.reduce((acc, order) => {
-            acc[order.user] = true;
-            return acc;
-          }, {})
-        ).length > 0 ? (
-          Object.keys(
-            overriddenOrders.reduce((acc, order) => {
-              acc[order.user] = true;
-              return acc;
-            }, {})
-          ).map((user) => (
-            <Col span={24} key={user}>
-              <Button
-                type={selectedPicker === user ? "primary" : "default"}
-                style={{
-                  width: "100%",
-                  textAlign: "left",
-                  padding: "8px",
-                }}
-                onClick={() => setSelectedPicker(user)}
-              >
-                {user}
-              </Button>
-            </Col>
-          ))
-        ) : (
-          <Col span={24}>
-            <Typography.Text>No users with overridden orders today</Typography.Text>
-          </Col>
-        )}
-      </Row>
-    </Card>
-  </Col>
-
-  <Col span={18}>
-    {selectedPicker ? (
-      <Card title={`Overridden Orders by ${selectedPicker}`}>
-        {/* Compute filtered orders once */}
-        {(() => {
-          const userOverriddenOrders = overriddenOrders.filter(
-            (order) => order.user === selectedPicker
-          );
-          return (
-            <>
-              <Row gutter={16} style={{ marginBottom: "16px" }}>
-                <Col span={8}>
-                  <Statistic
-                    title="Overridden Orders"
-                    value={userOverriddenOrders.length}
-                  />
-                </Col>
+        {/* Overridden Orders Section */}
+        <Row gutter={16} style={{ marginBottom: "20px" }}>
+          <Col span={6}>
+            <Card title="Users with Overridden Orders (Today)" style={{ height: "100%" }}>
+              <Row gutter={[16, 16]}>
+                {Object.keys(
+                  overriddenOrders.reduce((acc, order) => {
+                    acc[order.user] = true;
+                    return acc;
+                  }, {})
+                ).length > 0 ? (
+                  Object.keys(
+                    overriddenOrders.reduce((acc, order) => {
+                      acc[order.user] = true;
+                      return acc;
+                    }, {})
+                  ).map((user) => (
+                    <Col span={24} key={user}>
+                      <Button
+                        type={selectedPicker === user ? "primary" : "default"}
+                        style={{
+                          width: "100%",
+                          textAlign: "left",
+                          padding: "8px",
+                        }}
+                        onClick={() => setSelectedPicker(user)}
+                      >
+                        {user}
+                      </Button>
+                    </Col>
+                  ))
+                ) : (
+                  <Col span={24}>
+                    <Typography.Text>No users with overridden orders today</Typography.Text>
+                  </Col>
+                )}
               </Row>
-              <Table
-                columns={overriddenColumns}
-                dataSource={userOverriddenOrders.map((order, index) => ({
-                  ...order,
-                  key: order._id || index,
-                }))}
-                expandable={{
-                  expandedRowRender: (record) => (
-                    <Table
-                      columns={[
-                        {
-                          title: "Product Name",
-                          dataIndex: "name",
-                          key: "name",
-                        },
-                        {
-                          title: "Quantity",
-                          dataIndex: "quantity",
-                          key: "quantity",
-                        },
-                        {
-                          title: "Scanned Quantity",
-                          dataIndex: "scannedQuantity",
-                          key: "scannedQuantity",
-                        },
-                      ]}
-                      dataSource={record.products.map((product, index) => ({
-                        ...product,
-                        key: index,
-                      }))}
-                      pagination={false}
-                      size="small"
-                    />
-                  ),
-                  rowExpandable: (record) =>
-                    record.products && record.products.length > 0,
-                }}
-                pagination={{ pageSize: 5, showSizeChanger: false }}
-                rowKey="key"
-                locale={{ emptyText: "No overridden orders for this user" }}
-              />
-            </>
-          );
-        })()}
-      </Card>
-    ) : (
-      <Card>
-        <Typography.Text>Select a user to view overridden orders</Typography.Text>
-      </Card>
-    )}
-  </Col>
-</Row>
+            </Card>
+          </Col>
 
-        {/* Existing Packing Performance Collapse */}
+          <Col span={18}>
+            {selectedPicker ? (
+              <Card title={`Overridden Orders by ${selectedPicker}`}>
+                {(() => {
+                  const userOverriddenOrders = overriddenOrders.filter(
+                    (order) => order.user === selectedPicker
+                  );
+                  return (
+                    <>
+                      <Row gutter={16} style={{ marginBottom: "16px" }}>
+                        <Col span={8}>
+                          <Statistic
+                            title="Overridden Orders"
+                            value={userOverriddenOrders.length}
+                          />
+                        </Col>
+                      </Row>
+                      <Table
+                        columns={overriddenColumns}
+                        dataSource={userOverriddenOrders.map((order, index) => ({
+                          ...order,
+                          key: order._id || index,
+                        }))}
+                        expandable={{
+                          expandedRowRender: (record) => (
+                            <Table
+                              columns={[
+                                {
+                                  title: "Product Name",
+                                  dataIndex: "name",
+                                  key: "name",
+                                },
+                                {
+                                  title: "Quantity",
+                                  dataIndex: "quantity",
+                                  key: "quantity",
+                                },
+                                {
+                                  title: "Scanned Quantity",
+                                  dataIndex: "scannedQuantity",
+                                  key: "scannedQuantity",
+                                },
+                              ]}
+                              dataSource={record.products.map((product, index) => ({
+                                ...product,
+                                key: index,
+                              }))}
+                              pagination={false}
+                              size="small"
+                            />
+                          ),
+                          rowExpandable: (record) =>
+                            record.products && record.products.length > 0,
+                        }}
+                        pagination={{ pageSize: 5, showSizeChanger: false }}
+                        rowKey="key"
+                        locale={{ emptyText: "No overridden orders for this user" }}
+                      />
+                    </>
+                  );
+                })()}
+              </Card>
+            ) : (
+              <Card>
+                <Typography.Text>Select a user to view overridden orders</Typography.Text>
+              </Card>
+            )}
+          </Col>
+        </Row>
+
+        {/* Packing Performance Collapse for Today's Data */}
         <Collapse>
-          {Object.keys(userSummary).map((user) => (
-            <Panel
-              header={
-                <span>
-                  {user}{" "}
-                  {userSummary[user].active ? (
-                    <Badge status="processing" text="Active" />
-                  ) : (
-                    <Badge status="default" text="Inactive" />
-                  )}
-                </span>
-              }
-              key={user}
-            >
-              <Table
-                dataSource={filteredData.filter((item) => item.user === user)}
-                columns={packingColumns}
-                rowKey={(record) => record._id}
-                pagination={false}
-              />
-            </Panel>
-          ))}
+          {Object.keys(userSummary).map((user) => {
+            // Filter today's data for the specific user
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const tomorrow = new Date(today);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+
+            const userTodayData = filteredData.filter(
+              (item) =>
+                item.user === user &&
+                new Date(item.startTime) >= today &&
+                new Date(item.startTime) < tomorrow
+            );
+
+            // Skip rendering if no data for today
+            if (userTodayData.length === 0) return null;
+
+            return (
+              <Panel
+                header={
+                  <span>
+                    {user}{" "}
+                    {userSummary[user].active ? (
+                      <Badge status="processing" text="Active" />
+                    ) : (
+                      <Badge status="default" text="Inactive" />
+                    )}
+                    <span style={{ marginLeft: "10px" }}>
+                      (Today's Orders: {userTodayData.length})
+                    </span>
+                  </span>
+                }
+                key={user}
+              >
+                <Table
+                  dataSource={userTodayData}
+                  columns={packingColumns}
+                  rowKey={(record) => record._id}
+                  pagination={false}
+                />
+              </Panel>
+            );
+          })}
         </Collapse>
       </Spin>
     </div>
