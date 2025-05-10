@@ -386,7 +386,8 @@ const OrdersPage = ({ orders = [], columnWidths = {}, handleResize }) => {
             </Card>
           )}
 
-          <Card title="Product Details" size="small">
+          <div title="Product Details" size="small">
+            <h4>Product Details</h4>
             <Table
               columns={[
                 {
@@ -443,7 +444,7 @@ const OrdersPage = ({ orders = [], columnWidths = {}, handleResize }) => {
               bordered
               size="small"
             />
-          </Card>
+          </div>
 
           {!screens.xs && (
             <Card title="Packing & Warehouse Details" size="small">
@@ -538,7 +539,7 @@ const OrdersPage = ({ orders = [], columnWidths = {}, handleResize }) => {
 
       <Card
         bordered={false}
-        style={{ marginBottom: 16, borderRadius: 8, borderTop: '2px solid #3c77fa', }}
+        style={{ marginBottom: 16, borderRadius: 8, borderRight: '3px solid #3c77fa', }}
         bodyStyle={{ padding: screens.xs ? '8px' : '12px 16px' }}
       >
         <Tabs
@@ -630,8 +631,7 @@ const OrdersPage = ({ orders = [], columnWidths = {}, handleResize }) => {
   bordered={false}
   style={{
     marginBottom: 16,
-    borderRight: '4px solid #3c77fa',
-    borderLeft: '4px solid #3c77fa',
+    borderRight: '4px solid #3c77fa',   
     borderRadius: 8,
     overflow: 'hidden',
   }}
