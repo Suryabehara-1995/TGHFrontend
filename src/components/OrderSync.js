@@ -12,7 +12,7 @@ const { RangePicker } = DatePicker;
 
 const OrderSync = () => {
   const [orders, setOrders] = useState([]);
-  const [productMappings, setProductMappings] = useState([]); // State for ProductMapping data
+  const [productMappings, setProductMappings] = useState([]);
   const [dateRange, setDateRange] = useState([null, null]);
   const [loading, setLoading] = useState(false);
   const [totalOrders, setTotalOrders] = useState(0);
@@ -145,21 +145,20 @@ const OrderSync = () => {
                   ? parseFloat(weightMatch[1]) / (weightMatch[2].toLowerCase() === "kg" ? 1 : 1000)
                   : 0;
 
-                // Map product to ProductMapping using updatedID or another identifier
+                // Map product to ProductMapping using product.name
                 const productMapping = productMappings.find(
-                  (mapping) => mapping.updatedID === product.product_id
+                  (mapping) => mapping.productName === product.name
                 ) || {};
 
                 return {
                   id: product.id || `TEMP-PROD-${Date.now()}`,
-                  updated_id: product.product_id || `TEMP-UPD-${Date.now()}`,
+                  updated_id: productMapping.updatedID || product.product_id || `TEMP-UPD-${Date.now()}`,
                   sku: product.channel_sku || "Unknown SKU",
                   name: product.name || "Unknown Item",
                   quantity: product.quantity || 0,
                   weight: weight,
-                  imageUrl: productMapping.imageUrl || "", // Add imageUrl
-                  productLocation: productMapping.productLocation || "Unknown", // Add other fields
-                  productCategory: productMapping.productCategory || "Unknown",
+                  imageUrl: productMapping.imageUrl || "",
+                  productLocation: productMapping.productLocation || "Unknown",
                 };
               })
             : [];
@@ -180,28 +179,36 @@ const OrderSync = () => {
                   status: order.status || "N/A",
                 }))
               : [],
-            products: enrichedProducts, // Use enriched products with imageUrl and other fields
-            packed_status: order.packed_status || "Not Completed",
-            packed_date: order.packed_date || "Unknown Date",
-            packed_time: order.packed_time || "Unknown Time",
-            packed_person_name: order.packed_person_name || "Unknown",
-            warehouse_out: order.warehouse_out || "Unknown",
-            warehouse_out_date: order.warehouse_out_date || "Unknown Date",
-            warehouse_out_time: order.warehouse_out_time || "Unknown Time",
+            products: enrichedProducts,
+            // Only include optional fields if explicitly provided
+            ...(order.packed_status && { packed_status: order.packed_status }),
+            ...(order.packed_date && { packed_date: order.packed_date }),
+            ...(order.packed_time && { packed_time: order.packed_time }),
+            ...(order.packed_person_name && { packed_person_name: order.packed_person_name }),
+            ...(order.warehouse_out && { warehouse_out: order.warehouse_out }),
+            ...(order.warehouse_out_date && { warehouse_out_date: order.warehouse_out_date }),
+            ...(order.warehouse_out_time && { warehouse_out_time: order.warehouse_out_time }),
           };
         });
 
-        setOrders(processedOrders);
+        // Validate orders before setting state
+        const validProcessedOrders = processedOrders.filter(order => 
+          order.orderID &&
+          Array.isArray(order.products) && order.products.length > 0 &&
+          Array.isArray(order.shipments)
+        );
+
+        setOrders(validProcessedOrders);
         if (!isAutomated) {
           message.success({
-            content: `✅ ${processedOrders.length} orders fetched successfully!`,
+            content: `✅ ${validProcessedOrders.length} orders fetched successfully!`,
             key: "fetching",
             duration: 3,
           });
         } else {
-          console.log(`[${new Date().toISOString()}] Automated fetch: ${processedOrders.length} orders fetched successfully.`);
+          console.log(`[${new Date().toISOString()}] Automated fetch: ${validProcessedOrders.length} orders fetched successfully.`);
         }
-        return processedOrders;
+        return validProcessedOrders;
       } else {
         setOrders([]);
         setTotalOrders(0);
@@ -257,6 +264,22 @@ const OrderSync = () => {
       return;
     }
 
+    // Validate orders before uploading
+    const validOrders = effectiveOrders.filter(order => 
+      order.orderID &&
+      Array.isArray(order.products) && order.products.length > 0 &&
+      Array.isArray(order.shipments)
+    );
+
+    if (validOrders.length === 0) {
+      if (!isAutomated) {
+        message.warning("⚠ No valid orders to upload.");
+      } else {
+        console.log(`[${new Date().toISOString()}] Automated upload: No valid orders to upload.`);
+      }
+      return;
+    }
+
     setLoading(!isAutomated);
     setInitializingAction(isAutomated ? "automated" : "manual");
     if (!isAutomated) {
@@ -277,23 +300,23 @@ const OrderSync = () => {
       const response = await fetch(`${config.apiBaseUrl}/sync-orders`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ from: fromDateUTC, to: toDateUTC, orders: effectiveOrders }),
+        body: JSON.stringify({ from: fromDateUTC, to: toDateUTC, orders: validOrders }),
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Server error: ${response.status} - ${errorText}`);
+        const errorData = await response.json();
+        throw new Error(errorData.message || `Server error: ${response.status}`);
       }
 
       const result = await response.json();
       if (!isAutomated) {
         message.success({
-          content: `✅ ${result.insertedCount || 0} orders uploaded successfully!`,
+          content: `✅ ${result.insertedCount || 0} orders uploaded successfully! AWB Updates: ${result.updatedAwbOrders.length > 0 ? result.updatedAwbOrders.length : "None"}`,
           key: "uploading",
           duration: 3,
         });
       } else {
-        console.log(`[${new Date().toISOString()}] Automated upload: ${result.insertedCount || 0} orders uploaded successfully.`);
+        console.log(`[${new Date().toISOString()}] Automated upload: ${result.insertedCount || 0} orders uploaded successfully. AWB Updates: ${result.updatedAwbOrders.length > 0 ? result.updatedAwbOrders.length : "None"}`);
       }
     } catch (error) {
       console.error("Error uploading orders:", error);
@@ -343,9 +366,8 @@ const OrderSync = () => {
         productName: product.name,
         quantity: product.quantity,
         weight: product.weight,
-        imageUrl: product.imageUrl, // Include imageUrl in Excel
+        imageUrl: product.imageUrl,
         productLocation: product.productLocation,
-        productCategory: product.productCategory,
       }))
     );
 
@@ -395,7 +417,7 @@ const OrderSync = () => {
             fontWeight: "bold",
           }}
         >
-          {status}
+          {status || "Not Completed"}
         </span>
       ),
     },
@@ -414,10 +436,10 @@ const OrderSync = () => {
           </Col>
           <Col span={12}>
             <Card title="Packing Information" bordered>
-              <p><strong>Status:</strong> {record.packed_status}</p>
-              <p><strong>Date:</strong> {record.packed_date}</p>
-              <p><strong>Time:</strong> {record.packed_time}</p>
-              <p><strong>Packed By:</strong> {record.packed_person_name}</p>
+              <p><strong>Status:</strong> {record.packed_status || "Not Completed"}</p>
+              <p><strong>Date:</strong> {record.packed_date || "Unknown Date"}</p>
+              <p><strong>Time:</strong> {record.packed_time || "Unknown Time"}</p>
+              <p><strong>Packed By:</strong> {record.packed_person_name || "Unknown"}</p>
             </Card>
           </Col>
         </Row>
@@ -446,7 +468,6 @@ const OrderSync = () => {
                       <p><strong>Quantity:</strong> {product.quantity}</p>
                       <p><strong>Weight:</strong> {product.weight} kg</p>
                       <p><strong>Location:</strong> {product.productLocation}</p>
-                      <p><strong>Category:</strong> {product.productCategory}</p>
                       {index < record.products.length - 1 && <Divider />}
                     </li>
                   ))}
@@ -478,9 +499,9 @@ const OrderSync = () => {
         <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
           <Col span={12}>
             <Card title="Warehouse Details" bordered>
-              <p><strong>Warehouse Out:</strong> {record.warehouse_out}</p>
-              <p><strong>Date:</strong> {record.warehouse_out_date}</p>
-              <p><strong>Time:</strong> {record.warehouse_out_time}</p>
+              <p><strong>Warehouse Out:</strong> {record.warehouse_out || "Unknown"}</p>
+              <p><strong>Date:</strong> {record.warehouse_out_date || "Unknown Date"}</p>
+              <p><strong>Time:</strong> {record.warehouse_out_time || "Unknown Time"}</p>
             </Card>
           </Col>
         </Row>
