@@ -60,6 +60,7 @@ const OrdersPage = ({ orders = [], columnWidths = {}, handleResize }) => {
     order_status: 180,
     packed_status: 150,
     order_date: 140,
+    warehouse_out_status: 120,
     ...columnWidths,
   };
 
@@ -320,7 +321,7 @@ const OrdersPage = ({ orders = [], columnWidths = {}, handleResize }) => {
         ),
       },
       {
-        title: "Packing",
+        title: "Packing Status",
         dataIndex: "packed_status",
         key: "packed_status",
         width: localColumnWidths.packed_status,
@@ -328,6 +329,26 @@ const OrdersPage = ({ orders = [], columnWidths = {}, handleResize }) => {
           <Tag color={getPackingStatusTagColor(status)} style={{ borderRadius: '12px' }}>
             {status}
           </Tag>
+        ),
+      },
+   {
+        title: "Warehouse Out",
+        key: "warehouse_out_status",
+        width: localColumnWidths.warehouse_out_status,
+        render: (_, record) => (
+          <div>
+            <Tag
+              color={record.warehouse_out_date ? 'success' : 'default'}
+              style={{ borderRadius: '12px' }}
+            >
+              {record.warehouse_out_date ? 'Completed' : 'Not Completed'}
+            </Tag>
+            {!screens.xs && record.warehouse_out_date && (
+              <div style={{ color: '#666', fontSize: '12px' }}>
+                {moment(record.warehouse_out_date).format("DD-MM-YYYY")}
+              </div>
+            )}
+          </div>
         ),
       },
       {
