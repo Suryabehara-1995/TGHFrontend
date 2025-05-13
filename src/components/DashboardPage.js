@@ -1,561 +1,614 @@
-import React, { useEffect, useState } from "react";
-import axios from "axios";
-import { Card, Row, Col, Badge, Button } from "antd";
-import { LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, Legend } from "recharts";
-import { FaChartBar, FaCalendarDay, FaCalendarMinus, FaPauseCircle, FaCheckCircle, FaSun, FaMoon, FaTruck, FaUser, FaHourglassHalf } from "react-icons/fa";
-import moment from "moment";
-import { Triangle } from "react-loader-spinner";
-import Cookies from "js-cookie";
-import { useNavigate } from "react-router-dom";
-import { io } from "socket.io-client";
-import config from "../config";
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import {
+  Card,
+  Col,
+  Row,
+  Statistic,
+  message,
+  Breadcrumb,
+  Table,
+  Button,
+  Badge,
+  Progress,
+  Skeleton,
+} from 'antd';
+import {
+  LineChartOutlined,
+  CheckCircleOutlined,
+  BarChartOutlined,
+  ClockCircleOutlined,
+  DashboardOutlined,
+  HomeOutlined,
+  DownloadOutlined,
+  ApiOutlined,
+} from '@ant-design/icons';
+import config from '../config';
+import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement } from 'chart.js';
+import { Bar, Pie } from 'react-chartjs-2';
+import Cookies from 'js-cookie';
+import { useNavigate } from 'react-router-dom';
+import { FaHourglassHalf, FaUser } from 'react-icons/fa';
+import moment from 'moment';
 
-const DashboardPage = () => {
-  const [orderCounts, setOrderCounts] = useState({
-    today: 0,
-    todayCompleted: 0,
-    yesterday: 0,
-    total: 0,
-    onHold: 0,
-    completed: 0,
+// Register Chart.js components, including ArcElement for Pie chart
+ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement);
+
+function DashboardPage() {
+  const [todayStats, setTodayStats] = useState({
+    todayOrdersCount: 0,
+    todayCompletedCount: 0,
   });
-  const [orders, setOrders] = useState([]);
-  const [dailyOrders, setDailyOrders] = useState([]);
-  const [todayCourierCounts, setTodayCourierCounts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const navigate = useNavigate();
+  const [overallStats, setOverallStats] = useState({
+    totalOrdersCount: 0,
+    overallCompletedCount: 0,
+  });
+  const [ordersData, setOrdersData] = useState({ labels: [], orders: [], units: [] });
+  const [courierShipments, setCourierShipments] = useState([]);
   const [packedPersons, setPackedPersons] = useState([]);
-  const [theme, setTheme] = useState("light");
+  const [warehouseOutData, setWarehouseOutData] = useState({ yes: 0, no: 0 }); // New state for pie chart
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const navigate = useNavigate();
+
+  // Define currentTheme
+  const currentTheme = {
+    cardBackground: '#fff',
+    textPrimary: '#000',
+    textSecondary: '#666',
+    borderColor: '#e8e8e8',
+    buttonBackground: '#e0e0e0',
+  };
 
   useEffect(() => {
-    const token = Cookies.get("token");
-    const userName = Cookies.get("userName");
+    const token = Cookies.get('token');
+    const userName = Cookies.get('userName');
 
     if (!token || !userName) {
-      navigate("/");
+      navigate('/');
       return;
     }
 
-    const fetchOrders = async () => {
+    const fetchDashboardStats = async () => {
       try {
-        const response = await axios.get(`${config.apiBaseUrl}/all-orders`, {
-          headers: { Authorization: `Bearer ${token}` },
+        // Get date range for the last 30 days
+        const today = new Date();
+        const fromDate = new Date(today);
+        fromDate.setDate(today.getDate() - 29);
+        const fromDateStr = fromDate.toISOString().split('T')[0];
+        const toDateStr = today.toISOString().split('T')[0];
+
+        // Fetch today's orders
+        const todayResponse = await axios.get(`${config.apiBaseUrl}/all-orders`, {
+          params: { from: toDateStr, to: toDateStr },
         });
-        const orders = response.data.orders || [];
-        updateOrderData(orders);
-      } catch (error) {
-        console.error("Failed to fetch orders", error);
-        if (error.response?.status === 401) {
-          Cookies.remove("token");
-          Cookies.remove("userName");
-          Cookies.remove("userDetails");
-          navigate("/");
+
+        const todayOrders = Array.isArray(todayResponse.data.orders) ? todayResponse.data.orders : [];
+        const filteredTodayOrders = todayOrders.filter((order) => {
+          const orderDate = order.order_date ? new Date(order.order_date) : new Date(order.createdAt);
+          return orderDate.toISOString().split('T')[0] === toDateStr;
+        });
+
+        const todayOrdersCount = filteredTodayOrders.length;
+        const todayCompletedCount = filteredTodayOrders.filter(
+          (order) => order.packed_status === 'Completed'
+        ).length;
+
+        setTodayStats({ todayOrdersCount, todayCompletedCount });
+
+        // Process warehouse out status for today
+        const warehouseOutCounts = {
+          yes: filteredTodayOrders.filter((order) => order.warehouse_out === 'Yes').length,
+          no: filteredTodayOrders.filter((order) => order.warehouse_out !== 'Yes').length,
+        };
+        setWarehouseOutData(warehouseOutCounts);
+
+        // Process shipments by courier for today
+        const courierCounts = {};
+        filteredTodayOrders.forEach((order) => {
+          if (order.shipments && Array.isArray(order.shipments)) {
+            order.shipments.forEach((shipment) => {
+              const courier = shipment.courier_name || 'Unknown';
+              courierCounts[courier] = (courierCounts[courier] || 0) + 1;
+            });
+          }
+        });
+
+        // Convert to array and sort by count (descending)
+        const sortedCourierShipments = Object.entries(courierCounts)
+          .map(([courier_name, count]) => ({ courier_name, count }))
+          .sort((a, b) => b.count - a.count);
+
+        setCourierShipments(sortedCourierShipments);
+
+        // Process packing users for today
+        const packedData = filteredTodayOrders.reduce((acc, order) => {
+          if (order.packed_status === 'Completed') {
+            const personName =
+              order.packed_person_name?.trim() && order.packed_person_name?.trim() !== 'Unknown'
+                ? order.packed_person_name.trim()
+                : 'Unknown Packer';
+            acc[personName] = (acc[personName] || 0) + 1;
+          } else {
+            acc['Pending Orders'] = (acc['Pending Orders'] || 0) + 1;
+          }
+          return acc;
+        }, {});
+
+        const packedPersonsArray = Object.entries(packedData)
+          .map(([name, count]) => ({ name, count }))
+          .sort((a, b) => {
+            if (a.name === 'Pending Orders') return -1;
+            if (b.name === 'Pending Orders') return 1;
+            return a.name.localeCompare(b.name);
+          });
+
+        setPackedPersons(packedPersonsArray);
+
+        // Fetch all orders for overall stats and 30-day graph
+        const overallResponse = await axios.get(`${config.apiBaseUrl}/all-orders`, {
+          params: { from: fromDateStr, to: toDateStr },
+        });
+
+        const allOrders = Array.isArray(overallResponse.data.orders) ? overallResponse.data.orders : [];
+        const totalOrdersCount = allOrders.length;
+        const overallCompletedCount = allOrders.filter(
+          (order) => order.packed_status === 'Completed'
+        ).length;
+
+        setOverallStats({ totalOrdersCount, overallCompletedCount });
+
+        // Process data for the 30-day graph
+        const ordersByDay = {};
+        const unitsByDay = {};
+        const labels = [];
+
+        // Initialize 30 days of data
+        for (let i = 0; i < 30; i++) {
+          const date = new Date(fromDate);
+          date.setDate(fromDate.getDate() + i);
+          const dateStr = date.toISOString().split('T')[0];
+          ordersByDay[dateStr] = 0;
+          unitsByDay[dateStr] = 0;
+          labels.push(date.getDate().toString().padStart(2, '0'));
         }
-      } finally {
+
+        // Aggregate orders and units by day
+        allOrders.forEach((order) => {
+          const orderDate = order.order_date ? new Date(order.order_date) : new Date(order.createdAt);
+          const dateStr = orderDate.toISOString().split('T')[0];
+          if (ordersByDay[dateStr] !== undefined) {
+            ordersByDay[dateStr] += 1;
+            unitsByDay[dateStr] += order.products
+              ? order.products.reduce((sum, p) => sum + (p.quantity || 1), 0)
+              : 1;
+          }
+        });
+
+        const orders = Object.values(ordersByDay);
+        const units = Object.values(unitsByDay);
+
+        setOrdersData({ labels, orders, units });
+        setLoading(false);
+
+        message.info(`Hello, ${Cookies.get('userName')}! Welcome to the dashboard! Here are your statistics.`);
+      } catch (err) {
+        setError('Failed to load dashboard statistics');
         setLoading(false);
       }
     };
 
-    fetchOrders();
-
-    const socket = io(config.websocketUrl);
-    socket.on("orderUpdated", (updatedOrder) => {
-      setOrders((prevOrders) => {
-        const updatedOrders = prevOrders.map((order) =>
-          order.id === updatedOrder.id ? updatedOrder : order
-        );
-        updateOrderData(updatedOrders);
-        return updatedOrders;
-      });
-    });
-
-    return () => {
-      socket.disconnect();
-    };
+    fetchDashboardStats();
   }, [navigate]);
 
-  const updateOrderData = (orders) => {
-    const today = moment().startOf("day");
-    const yesterday = moment().subtract(1, "days").startOf("day");
-
-    const counts = orders.reduce(
-      (acc, order) => {
-        const orderDate = moment(order.order_date);
-        if (orderDate.isSame(today, "day")) {
-          acc.today += 1;
-          if (order.packed_status === "Completed") acc.todayCompleted += 1;
-        } else if (orderDate.isSame(yesterday, "day")) acc.yesterday += 1;
-        if (order.packed_status === "Hold") acc.onHold += 1;
-        if (order.packed_status === "Completed") acc.completed += 1;
-        acc.total += 1;
-        return acc;
+  // Chart.js data and options
+  const chartData = {
+    labels: ordersData.labels,
+    datasets: [
+      {
+        label: 'Orders',
+        data: ordersData.orders,
+        backgroundColor: '#ff6f61',
+        stack: 'Stack 0',
       },
-      { today: 0, todayCompleted: 0, yesterday: 0, total: 0, onHold: 0, completed: 0 }
-    );
-
-    setOrderCounts(counts);
-    setOrders(orders);
-
-    const dailyCounts = [];
-    for (let i = 6; i >= 0; i--) {
-      const day = moment().subtract(i, "days").startOf("day");
-      const count = orders.filter((order) => moment(order.order_date).isSame(day, "day")).length;
-      dailyCounts.push({ day: day.format("MMM"), count });
-    }
-    setDailyOrders(dailyCounts);
-
-    // Filter for today's orders only
-    const todayOrders = orders.filter((order) => moment(order.order_date).isSame(today, "day"));
-    const packedData = todayOrders.reduce((acc, order) => {
-      const personName =
-        order.packed_person_name?.trim() && order.packed_person_name?.trim() !== "Unknown"
-          ? order.packed_person_name.trim()
-          : null;
-      if (personName) {
-        acc[personName] = (acc[personName] || 0) + 1;
-      } else {
-        acc["Pending Orders"] = (acc["Pending Orders"] || 0) + 1;
-      }
-      return acc;
-    }, {});
-
-    const packedPersonsArray = Object.entries(packedData).map(([name, count]) => ({ name, count }));
-    setPackedPersons(packedPersonsArray);
-
-    const courierData = todayOrders.reduce((acc, order) => {
-      if (order.shipments && order.shipments.length > 0) {
-        const uniqueCouriers = [
-          ...new Set(order.shipments.map((shipment) => shipment.courier_name?.trim()).filter(Boolean)),
-        ];
-        uniqueCouriers.forEach((courier) => {
-          acc[courier] = (acc[courier] || 0) + 1;
-        });
-      }
-      return acc;
-    }, {});
-
-    const todayCourierCountsArray = Object.entries(courierData)
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count);
-    setTodayCourierCounts(todayCourierCountsArray);
+      {
+        label: 'Units',
+        data: ordersData.units,
+        backgroundColor: '#ffdede',
+        stack: 'Stack 0',
+      },
+    ],
   };
 
-  const percentageChange = (current, reference) => {
-    if (reference === 0) return "+0%";
-    const change = ((current - reference) / reference) * 100;
-    return `${change > 0 ? "+" : ""}${change.toFixed(1)}%`;
-  };
-
-  const pieData = [
-    { name: "Completed", value: orders.filter((order) => order.packed_status === "Completed").length },
-    { name: "On Hold", value: orders.filter((order) => order.packed_status === "Hold").length },
-    { name: "Pending", value: orders.filter((order) => order.packed_status === "Pending").length },
-  ];
-
-  const COLORS = ["#22C55E", "#A855F7", "#FF6B6B"];
-
-  const themes = {
-    dark: {
-      background: "#1B254B",
-      cardBackground: "#252D5A",
-      textPrimary: "#FFFFFF",
-      textSecondary: "#A0AEC0",
-      borderColor: "#4A5568",
-      buttonBackground: "#1B254B",
-      chartAxisColor: "#A0AEC0",
-      tooltipBackground: "#1B254B",
+  const chartOptions = {
+    plugins: {
+      legend: {
+        position: 'top',
+      },
+      title: {
+        display: true,
+        text: 'Your Daily Orders Data from Last 30 Days',
+      },
     },
-    light: {
-      background: "#F7FAFC",
-      cardBackground: "#FFFFFF",
-      textPrimary: "#1A202C",
-      textSecondary: "#718096",
-      borderColor: "#E2E8F0",
-      buttonBackground: "#EDF2F7",
-      chartAxisColor: "#718096",
-      tooltipBackground: "#FFFFFF",
+    scales: {
+      x: {
+        title: {
+          display: true,
+          text: 'Day',
+        },
+      },
+      y: {
+        beginAtZero: true,
+        title: {
+          display: true,
+          text: 'Count',
+        },
+      },
     },
+    maintainAspectRatio: false,
   };
 
-  const currentTheme = themes[theme];
-
-  const toggleTheme = () => {
-    setTheme(theme === "dark" ? "light" : "dark");
+  // Pie Chart data and options for warehouse out status
+  const pieChartData = {
+    labels: ['Out: Yes', 'Out: No'],
+    datasets: [
+      {
+        data: [warehouseOutData.yes, warehouseOutData.no],
+        backgroundColor: ['#22c55e', '#ef4444'], // Green for Yes, Red for No
+        hoverOffset: 10,
+      },
+    ],
   };
 
-  if (loading) {
-    return (
-      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh", background: currentTheme.background }}>
-        <Triangle visible={true} height="80" width="80" color="#22B8CF" ariaLabel="triangle-loading" />
-      </div>
-    );
-  }
+  const pieChartOptions = {
+    plugins: {
+      legend: { position: 'top', labels: { font: { size: 12 } } },
+      title: { display: true, text: "Today's Warehouse Out", font: { size: 14 } },
+    },
+    maintainAspectRatio: false,
+  };
 
-  return (
-    <div style={{ background: currentTheme.background, minHeight: "100vh", padding: "30px 15px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
-        <div>
-          <h1 style={{ fontSize: "28px", fontWeight: "bold", color: currentTheme.textPrimary, marginBottom: "4px" }}>
-            Dashboard
-          </h1>
-          <p style={{ fontSize: "14px", color: currentTheme.textSecondary, marginBottom: "0" }}>
-            Welcome back, {Cookies.get("userName")}!
-          </p>
-        </div>
-        <Button
-          onClick={toggleTheme}
+  // Table columns for shipments
+  const shipmentColumns = [
+    {
+      title: '',
+      dataIndex: 'icon',
+      key: 'icon',
+      render: () => (
+        <div
           style={{
-            background: currentTheme.buttonBackground,
-            border: "none",
-            borderRadius: "8px",
-            padding: "8px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
+            width: '32px',
+            height: '32px',
+            borderRadius: '50%',
+            backgroundColor: '#e0e0e0',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '16px',
           }}
         >
-          {theme === "dark" ? (
-            <FaSun size={20} color={currentTheme.textSecondary} />
-          ) : (
-            <FaMoon size={20} color={currentTheme.textSecondary} />
-          )}
-        </Button>
-      </div>
+          📦
+        </div>
+      ),
+      width: 50,
+    },
+    {
+      title: 'Courier',
+      dataIndex: 'courier_name',
+      key: 'courier_name',
+    },
+    {
+      title: 'Type',
+      key: 'type',
+      render: () => 'Shipments',
+    },
+    {
+      title: 'Total',
+      dataIndex: 'count',
+      key: 'total',
+      render: (count) => `${count}`,
+    },
+  ];
 
-      {/* Stat Cards */}
-      <Row gutter={[8, 8]} style={{ marginBottom: "16px" }}>
-        <Col xs={12} sm={12} md={6}>
-          <Card
-            style={{
-              background: currentTheme.cardBackground,
-              borderRadius: "12px",
-              border: "none",
-              padding: "10px",
-              color: currentTheme.textPrimary,
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
-              <FaCalendarDay size={18} color="#22B8CF" />
-              <Badge color="#22B8CF" text="Today" style={{ color: currentTheme.textSecondary, fontSize: "10px", fontWeight: "500" }} />
-            </div>
-            <h3 style={{ fontSize: "12px", color: currentTheme.textSecondary, marginBottom: "4px" }}>Today Orders</h3>
-            <p style={{ fontSize: "20px", fontWeight: "bold", color: currentTheme.textPrimary, marginBottom: "4px" }}>
-              {orderCounts.today} <span style={{ fontSize: "14px", color: "#22C55E" }}>({orderCounts.todayCompleted} Completed)</span>
-            </p>
-            <p style={{ fontSize: "10px", color: orderCounts.today >= orderCounts.yesterday ? "#22C55E" : "#FF6B6B" }}>
-              {percentageChange(orderCounts.today, orderCounts.yesterday)} since yesterday
-            </p>
-          </Card>
-        </Col>
+  return (
+    <div style={{ position: 'relative' }}>
+      {/* Top Loading Bar */}
+      {loading && (
+        <Progress
+          percent={100}
+          showInfo={false}
+          status="active"
+          strokeColor="#1677ff"
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            zIndex: 1000,
+            margin: 0,
+            lineHeight: '4px',
+          }}
+        />
+      )}
 
-        <Col xs={12} sm={12} md={6}>
-          <Card
-            style={{
-              background: currentTheme.cardBackground,
-              borderRadius: "12px",
-              border: "none",
-              padding: "10px",
-              color: currentTheme.textPrimary,
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
-              <FaCalendarMinus size={18} color="#FF6B6B" />
-              <Badge color="#FF6B6B" text="Yesterday" style={{ color: currentTheme.textSecondary, fontSize: "10px", fontWeight: "500" }} />
-            </div>
-            <h3 style={{ fontSize: "12px", color: currentTheme.textSecondary, marginBottom: "4px" }}>Yesterday Orders</h3>
-            <p style={{ fontSize: "20px", fontWeight: "bold", color: currentTheme.textPrimary, marginBottom: "4px" }}>
-              {orderCounts.yesterday}
-            </p>
-            <p style={{ fontSize: "10px", color: orderCounts.yesterday >= orderCounts.today ? "#22C55E" : "#FF6B6B" }}>
-              {percentageChange(orderCounts.yesterday, orderCounts.today)} compared to today
-            </p>
-          </Card>
-        </Col>
+      {/* Main Content */}
+      <div className="container mx-auto p-6" style={{ padding: '30px', backgroundColor: '#f9f9f9' }}>
+        {error ? (
+          <div className="text-center text-red-500">{error}</div>
+        ) : (
+          <>
+            <Row className="mb-12" style={{ marginBottom: '20px' }}>
+              <Col md={12} xs={24} sm={24}>
+                <Breadcrumb
+                  items={[
+                    { href: '', title: <HomeOutlined /> },
+                    { href: '', title: <><DashboardOutlined /><span>Dashboard</span></> },
+                  ]}
+                />
+              </Col>
+              <Col md={12} xs={24} sm={24}>
+                <p style={{ textAlign: 'end' }}>
+                  <ApiOutlined /> Welcome back, {Cookies.get('userName')}! Here are your statistics for today
+                </p>
+              </Col>
+            </Row>
 
-        <Col xs={12} sm={12} md={6}>
-          <Card
-            style={{
-              background: currentTheme.cardBackground,
-              borderRadius: "12px",
-              border: "none",
-              padding: "10px",
-              color: currentTheme.textPrimary,
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
-              <FaPauseCircle size={18} color="#A855F7" />
-              <Badge color="#A855F7" text="On Hold" style={{ color: currentTheme.textSecondary, fontSize: "10px", fontWeight: "500" }} />
-            </div>
-            <h3 style={{ fontSize: "12px", color: currentTheme.textSecondary, marginBottom: "4px" }}>Orders on Hold</h3>
-            <p style={{ fontSize: "20px", fontWeight: "bold", color: currentTheme.textPrimary, marginBottom: "4px" }}>
-              {orderCounts.onHold}
-            </p>
-            <p style={{ fontSize: "10px", color: "#FF6B6B" }}>
-              {percentageChange(orderCounts.onHold, orderCounts.total)} of total orders
-            </p>
-          </Card>
-        </Col>
-        <Col xs={12} sm={12} md={6}>
-          <Card
-            style={{
-              background: currentTheme.cardBackground,
-              borderRadius: "12px",
-              border: "none",
-              padding: "10px",
-              color: currentTheme.textPrimary,
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
-              <FaCheckCircle size={18} color="#22C55E" />
-              <Badge color="#22C55E" text="Completed" style={{ color: currentTheme.textSecondary, fontSize: "10px", fontWeight: "500" }} />
-            </div>
-            <h3 style={{ fontSize: "12px", color: currentTheme.textSecondary, marginBottom: "4px" }}>Completed Orders</h3>
-            <p style={{ fontSize: "20px", fontWeight: "bold", color: currentTheme.textPrimary, marginBottom: "4px" }}>
-              {orderCounts.completed}
-            </p>
-            <p style={{ fontSize: "10px", color: "#22C55E" }}>
-              {percentageChange(orderCounts.completed, orderCounts.total)} of total orders
-            </p>
-          </Card>
-        </Col>
-      </Row>
+            {/* Dashboard Title */}
+            <h2
+              style={{
+                background: 'white',
+                padding: '18px',
+                borderRadius: '11px',
+                borderLeft: '3px solid #194646',
+                fontSize: '1.5rem',
+                fontWeight: 'bold',
+                marginBottom: '1rem',
+              }}
+            >
+              <span style={{ marginLeft: '8px' }}>
+                <DashboardOutlined />
+              </span>{' '}
+              Dashboard
+            </h2>
 
-      {/* Charts and Tables */}
-      <Row gutter={[8, 8]} style={{ marginBottom: "16px" }}>
-        <Col xs={24} md={16}>
-          <Card
-            style={{
-              background: currentTheme.cardBackground,
-              borderRadius: "12px",
-              border: "none",
-              padding: "10px",
-              color: currentTheme.textPrimary,
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-              <h3 style={{ fontSize: "14px", color: currentTheme.textPrimary, fontWeight: "600" }}>Sales Value</h3>
-              <div>
-                <Button
-                  style={{
-                    background: currentTheme.buttonBackground,
-                    color: currentTheme.textSecondary,
-                    border: "none",
-                    borderRadius: "6px",
-                    padding: "4px 6px",
-                    fontSize: "10px",
-                    marginRight: "4px",
-                  }}
-                >
-                  Month
-                </Button>
-                <Button
-                  style={{
-                    background: currentTheme.buttonBackground,
-                    color: currentTheme.textSecondary,
-                    border: "none",
-                    borderRadius: "6px",
-                    padding: "4px 6px",
-                    fontSize: "10px",
-                  }}
-                >
-                  Week
-                </Button>
-              </div>
-            </div>
-            <LineChart width={window.innerWidth < 768 ? 300 : 500} height={200} data={dailyOrders}>
-              <XAxis dataKey="day" stroke={currentTheme.chartAxisColor} />
-              <YAxis stroke={currentTheme.chartAxisColor} />
-              <Tooltip
-                contentStyle={{
-                  background: currentTheme.tooltipBackground,
-                  border: "none",
-                  borderRadius: "6px",
-                  color: currentTheme.textPrimary,
-                }}
-                formatter={(value) => [value, "Orders"]}
-                labelFormatter={(label) => `Month: ${label}`}
-              />
-              <Line
-                type="monotone"
-                dataKey="count"
-                stroke="#22B8CF"
-                strokeWidth={2}
-                dot={{ r: 4 }}
-              />
-            </LineChart>
-          </Card>
-        </Col>
-
-        <Col xs={24} md={8}>
-          <Card
-            style={{
-              background: currentTheme.cardBackground,
-              borderRadius: "12px",
-              border: "none",
-              padding: "10px",
-              color: currentTheme.textPrimary,
-            }}
-          >
-            <h3 style={{ fontSize: "14px", color: currentTheme.textPrimary, fontWeight: "600", marginBottom: "6px" }}>
-              Order Status
-            </h3>
-            <PieChart width={window.innerWidth < 768 ? 200 : 250} height={200}>
-              <Pie
-                data={pieData}
-                dataKey="value"
-                nameKey="name"
-                cx="50%"
-                cy="50%"
-                outerRadius={window.innerWidth < 768 ? 60 : 80}
-                fill="#8884d8"
-              >
-                {pieData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip
-                contentStyle={{
-                  background: currentTheme.tooltipBackground,
-                  border: "none",
-                  borderRadius: "6px",
-                  color: currentTheme.textPrimary,
-                }}
-                formatter={(value) => [value, "Orders"]}
-              />
-              <Legend wrapperStyle={{ color: currentTheme.textSecondary, fontSize: "10px" }} />
-            </PieChart>
-          </Card>
-        </Col>
-      </Row>
-
-      <Row gutter={[8, 8]}>
-        <Col xs={24} md={12}>
-          <Card
-            style={{
-              background: currentTheme.cardBackground,
-              borderRadius: "12px",
-              border: "none",
-              padding: "10px",
-              color: currentTheme.textPrimary,
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
-              <h3 style={{ fontSize: "14px", fontWeight: "600", color: currentTheme.textPrimary, margin: 0 }}>
-                Today's Packing Users
-              </h3>
-              <Badge
-                color="#22B8CF"
-                text="Today"
-                style={{ color: currentTheme.textSecondary, fontSize: "10px", fontWeight: "500", background: currentTheme.buttonBackground, padding: "2px 4px", borderRadius: "4px" }}
-              />
-            </div>
-            <ul style={{ listStyleType: "none", padding: 0 }}>
-              {packedPersons.length > 0 ? (
-                packedPersons.map((person) => (
-                  <li
-                    key={person.name}
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      padding: "8px 0",
-                      borderBottom: `1px solid ${currentTheme.borderColor}`,
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center" }}>
-                      {person.name === "Pending Orders" ? (
-                        <FaHourglassHalf size={16} color="#FF6B6B" style={{ marginRight: "8px" }} />
-                      ) : (
-                        <FaUser size={16} color="#22B8CF" style={{ marginRight: "8px" }} />
-                      )}
-                      <span style={{ fontSize: "12px", color: currentTheme.textSecondary }}>
-                        {person.name}
-                      </span>
-                    </div>
-                    <span style={{ fontSize: "12px", fontWeight: "bold", color: "#22B8CF" }}>
-                      {person.count}
-                    </span>
-                  </li>
+            {/* Metric Cards Row */}
+            <Row gutter={[16, 16]} className="mb-6">
+              {loading ? (
+                // Skeleton for Metric Cards
+                [1, 2, 3, 4].map((_, index) => (
+                  <Col xs={24} sm={12} md={6} key={index}>
+                    <Card style={{ borderRadius: '10px', textAlign: 'center' }}>
+                      <Skeleton active paragraph={{ rows: 2 }} title={false} />
+                    </Card>
+                  </Col>
                 ))
               ) : (
-                <li style={{ fontSize: "12px", color: currentTheme.textSecondary, textAlign: "center", padding: "8px 0" }}>
-                  No packing data for today
-                </li>
-              )}
-            </ul>
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} md={12}>
-          <Card
-            style={{
-              background: currentTheme.cardBackground,
-              borderRadius: "12px",
-              border: "none",
-              padding: "10px",
-              color: currentTheme.textPrimary,
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
-              <div style={{ display: "flex", alignItems: "center" }}>
-                <FaTruck size={20} color="#FFA500" style={{ marginRight: "6px" }} />
-                <h3 style={{ fontSize: "14px", fontWeight: "600", color: currentTheme.textPrimary, margin: 0 }}>
-                  Today’s Orders by Courier
-                </h3>
-              </div>
-              <Badge
-                color="#FFA500"
-                text="Today"
-                style={{ color: currentTheme.textSecondary, fontSize: "10px", fontWeight: "500", background: currentTheme.buttonBackground, padding: "2px 4px", borderRadius: "4px" }}
-              />
-            </div>
-            <ul style={{ listStyleType: "none", padding: 0, maxHeight: "200px", overflowY: "auto" }}>
-              {todayCourierCounts.length > 0 ? (
-                todayCourierCounts.map((courier) => (
-                  <li
-                    key={courier.name}
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      padding: "6px 8px",
-                      marginBottom: "4px",
-                      background: currentTheme.cardBackground === "#FFFFFF" ? "#F9FAFB" : "#2D3748",
-                      borderRadius: "6px",
-                    }}
-                  >
-                    <span style={{ fontSize: "12px", fontWeight: "500", color: currentTheme.textPrimary, flex: 1 }}>
-                      {courier.name || "Unknown"}
-                    </span>
-                    <div style={{ display: "flex", alignItems: "center" }}>
-                      <span style={{ fontSize: "12px", fontWeight: "bold", color: "#FFA500", marginRight: "6px" }}>
-                        {courier.count}
-                      </span>
-                      <Badge
-                        count={courier.count}
-                        style={{ backgroundColor: "#FFA500", color: "#FFF", fontSize: "10px", padding: "0 4px", borderRadius: "10px" }}
+                <>
+                  <Col xs={24} sm={12} md={6}>
+                    <Card style={{ backgroundColor: '#f0f0f0', borderRadius: '10px', textAlign: 'center' }}>
+                      <h4 style={{ color: '#000', textAlign: 'center' }}>Today's Orders</h4>
+                      <Statistic
+                        title=""
+                        value={todayStats.todayOrdersCount}
+                        prefix={<LineChartOutlined />}
+                        valueStyle={{ color: '#000' }}
                       />
-                    </div>
-                  </li>
-                ))
-              ) : (
-                <li style={{ fontSize: "12px", color: currentTheme.textSecondary, textAlign: "center", padding: "8px 0" }}>
-                  No courier data for today
-                </li>
+                    </Card>
+                  </Col>
+                  <Col xs={24} sm={12} md={6}>
+                    <Card style={{ backgroundColor: '#14b8a6', borderRadius: '10px', textAlign: 'center' }}>
+                      <h4 style={{ color: '#fff', textAlign: 'center' }}>Today's Completed Orders</h4>
+                      <Statistic
+                        title=""
+                        value={todayStats.todayCompletedCount}
+                        prefix={<CheckCircleOutlined />}
+                        valueStyle={{ color: '#fff' }}
+                        titleStyle={{ color: '#fff' }}
+                      />
+                    </Card>
+                  </Col>
+                  <Col xs={24} sm={12} md={6}>
+                    <Card style={{ backgroundColor: '#343d4a', borderRadius: '10px', textAlign: 'center' }}>
+                      <h4 style={{ color: '#fff', textAlign: 'center' }}>Total Orders</h4>
+                      <Statistic
+                        title=""
+                        value={overallStats.totalOrdersCount}
+                        prefix={<BarChartOutlined />}
+                        valueStyle={{ color: '#fff' }}
+                        titleStyle={{ color: '#fff' }}
+                      />
+                    </Card>
+                  </Col>
+                  <Col xs={24} sm={12} md={6}>
+                    <Card style={{ background: '#ff9b7b', borderRadius: '10px', textAlign: 'center' }}>
+                      <h4 style={{ color: '#fff', textAlign: 'center' }}>Total Completed Orders</h4>
+                      <Statistic
+                        value={overallStats.overallCompletedCount}
+                        prefix={<ClockCircleOutlined />}
+                        valueStyle={{ color: '#fff' }}
+                        titleStyle={{ color: '#fff' }}
+                      />
+                    </Card>
+                  </Col>
+                </>
               )}
-            </ul>
-            {todayCourierCounts.length > 0 && (
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 8px", marginTop: "6px", borderTop: `1px solid ${currentTheme.borderColor}` }}>
-                <span style={{ fontSize: "12px", fontWeight: "600", color: currentTheme.textPrimary }}>Total</span>
-                <span style={{ fontSize: "12px", fontWeight: "bold", color: "#FFA500" }}>
-                  {todayCourierCounts.reduce((sum, courier) => sum + courier.count, 0)}
-                </span>
-              </div>
-            )}
-          </Card>
-        </Col>
-      </Row>
+            </Row>
+
+            <Row className="mb-12">
+              <Col md={12} xs={24} sm={24}>
+                {/* Orders Histogram */}
+                <Card style={{ borderRadius: '10px', marginBottom: '20px', width: '100%', marginTop: '20px' }}>
+                  {loading ? (
+                    <Skeleton active paragraph={{ rows: 10 }} title={false} style={{ height: '400px' }} />
+                  ) : (
+                    <div style={{ height: '400px' }}>
+                      <Bar data={chartData} options={chartOptions} />
+                    </div>
+                  )}
+                </Card>
+              </Col>
+              <Col md={12} xs={24} sm={24}>
+                {/* Shipments by Courier */}
+                <Card style={{ borderRadius: '10px', marginBottom: '20px', width: '100%', marginTop: '20px', marginLeft: '5px' }}>
+                  {loading ? (
+                    <Skeleton active paragraph={{ rows: 4 }} title={true} />
+                  ) : (
+                    <>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                        <h4 style={{  fontWeight: 'bold', color: '#666' }}>
+                          Today's Shipments by Courier
+                        </h4>
+                        <Button
+                          type="primary"
+                          shape="circle"
+                          icon={<DownloadOutlined />}
+                          style={{ backgroundColor: '#ff6f61', borderColor: '#ff6f61' }}
+                          onClick={() => message.info('Restricted access by admin')}
+                        />
+                      </div>
+                      <Table
+                        columns={shipmentColumns}
+                        dataSource={courierShipments}
+                        pagination={{
+                          pageSize: 4,
+                          showSizeChanger: false,
+                          position: ['bottomCenter'],
+                        }}
+                        rowKey="courier_name"
+                        locale={{ emptyText: 'No shipments for today' }}
+                        style={{ backgroundColor: '#fff', borderRadius: '8px' }}
+                      />
+                    </>
+                  )}
+                </Card>
+              </Col>
+            </Row>
+
+            <Row className="mb-12">
+              <Col md={12} xs={24} sm={24}>
+                <Card
+                  style={{
+                    background: currentTheme.cardBackground,
+                    borderRadius: '12px',
+                    border: 'none',
+                    padding: '10px',
+                    marginTop: '20px',
+                    color: currentTheme.textPrimary,
+                  }}
+                >
+                  {loading ? (
+                    <Skeleton active paragraph={{ rows: 4 }} title={true} />
+                  ) : (
+                    <>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                        <h3 style={{ fontSize: '14px', fontWeight: '600', color: currentTheme.textPrimary, margin: 0 }}>
+                          Today's Packing Users
+                        </h3>
+                        <Badge
+                          color="#22B8CF"
+                          text="Today"
+                          style={{
+                            color: currentTheme.textSecondary,
+                            fontSize: '10px',
+                            fontWeight: '500',
+                            background: currentTheme.buttonBackground,
+                            padding: '2px 4px',
+                            borderRadius: '4px',
+                          }}
+                        />
+                      </div>
+                      <ul style={{ listStyleType: 'none', padding: 0 }}>
+                        {packedPersons.length > 0 ? (
+                          packedPersons.map((person, index) => (
+                            <li
+                              key={index}
+                              style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                padding: '8px 0',
+                                borderBottom: `1px solid ${currentTheme.borderColor}`,
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center' }}>
+                                <div
+                                  style={{
+                                    width: '40px',
+                                    height: '40px',
+                                    borderRadius: '8px',
+                                    backgroundColor: person.name === 'Pending Orders' || person.name === 'Unknown Packer' ? '#FF6B6B' : '#22B8CF',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    marginRight: '12px',
+                                  }}
+                                >
+                                  {person.name === 'Pending Orders' || person.name === 'Unknown Packer' ? (
+                                    <FaHourglassHalf size={20} color="#FFFFFF" />
+                                  ) : (
+                                    <FaUser size={20} color="#FFFFFF" />
+                                  )}
+                                </div>
+                                <span style={{ fontSize: '14px', fontWeight: '500', color: currentTheme.textPrimary }}>
+                                  {person.name}
+                                </span>
+                              </div>
+                              <span style={{ fontSize: '14px', fontWeight: 'bold', color: currentTheme.textPrimary }}>
+                                {person.count}
+                              </span>
+                            </li>
+                          ))
+                        ) : (
+                          <li style={{ fontSize: '12px', color: currentTheme.textSecondary, textAlign: 'center', padding: '8px 0' }}>
+                            No packing data for today
+                          </li>
+                        )}
+                      </ul>
+                    </>
+                  )}
+                </Card>
+              </Col>
+              <Col md={12} xs={24} sm={24}>
+                <Card
+                  style={{
+                    borderRadius: '10px',
+                    marginBottom: '20px',
+                    width: '100%',
+                    height: '351px',
+                    marginLeft: '5px',
+                    marginTop: '20px',
+                  }}
+                >
+                  {loading ? (
+                    <Skeleton active paragraph={{ rows: 4 }} title={false} style={{ height: '250px' }} />
+                  ) : (
+                    <>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center',  }}>
+                        <h3 style={{  fontWeight: 'bold', color: '#666', margin: 0 }}>
+                          Today's Warehouse Out
+                        </h3>
+                        <Button
+                          type="primary"
+                          shape="circle"
+                          icon={<DownloadOutlined />}
+                          size="small"
+                          style={{ backgroundColor: '#ff6f61', borderColor: '#ff6f61' }}
+                          onClick={() => message.info('Restricted access by admin')}
+                        />
+                      </div>
+                      <div style={{ height: '200px' }}>
+                        <Pie data={pieChartData} options={pieChartOptions} />
+                      </div>
+                    </>
+                  )}
+                </Card>
+              </Col>
+            </Row>
+          </>
+        )}
+      </div>
     </div>
   );
-};
+}
 
 export default DashboardPage;
