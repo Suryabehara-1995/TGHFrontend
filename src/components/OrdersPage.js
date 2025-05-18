@@ -46,12 +46,13 @@ const OrdersPage = ({ orders = [], columnWidths = {}, handleResize }) => {
   const [dateRange, setDateRange] = useState(null);
   const [activeTab, setActiveTab] = useState("all");
   const [shiprocketStatuses, setShiprocketStatuses] = useState([]);
+  const [courierNames, setCourierNames] = useState([]);
   const [isFilterModalVisible, setIsFilterModalVisible] = useState(false);
   const [packingStatusFilter, setPackingStatusFilter] = useState(null);
   const [sortOrder, setSortOrder] = useState(null);
+  const [courierNamesSelected, setCourierNamesSelected] = useState([]);
   const screens = useBreakpoint();
 
-  // Initialize columnWidths with default values if not provided
   const initialColumnWidths = {
     sno: 70,
     orderID: 180,
@@ -68,20 +69,39 @@ const OrdersPage = ({ orders = [], columnWidths = {}, handleResize }) => {
 
   useEffect(() => {
     applyFilters({});
-  }, [orders]);
+
+    // Filter orders based on dateRange to get relevant courier names
+    let filtered = orders ? [...orders] : [];
+    if (dateRange && dateRange[0] && dateRange[1]) {
+      const startDate = moment(dateRange[0]).utcOffset(0, true).startOf("day");
+      const endDate = moment(dateRange[1]).utcOffset(0, true).endOf("day");
+      filtered = filtered.filter((order) => {
+        const orderDate = moment(order.order_date).utc();
+        return orderDate.isBetween(startDate, endDate, null, "[]");
+      });
+    }
+
+    // Extract unique courier names from filtered orders
+    const uniqueCouriers = [...new Set(filtered.map((order) => order.shipments?.[0]?.courier_name || "N/A"))].filter(
+      (name) => name !== "N/A"
+    );
+    setCourierNames(uniqueCouriers);
+
+    // Reset selected couriers if they are no longer in the updated courierNames
+    setCourierNamesSelected((prev) => prev.filter((courier) => uniqueCouriers.includes(courier)));
+  }, [orders, dateRange]);
 
   const handleResizeLocal = (index) => (e, { size }) => {
     const columnKeys = Object.keys(localColumnWidths);
     const columnKey = columnKeys[index];
-    
+
     if (columnKey) {
       const newWidths = {
         ...localColumnWidths,
         [columnKey]: size.width,
       };
       setLocalColumnWidths(newWidths);
-      
-      // Call the parent handleResize if provided
+
       if (handleResize) {
         handleResize(newWidths);
       }
@@ -95,10 +115,10 @@ const OrdersPage = ({ orders = [], columnWidths = {}, handleResize }) => {
     tab = activeTab,
     packingStatus = packingStatusFilter,
     sort = sortOrder,
+    couriers = courierNamesSelected,
   } = {}) => {
     let filtered = orders ? [...orders] : [];
 
-    // Apply search filter
     if (filtered.length && (search !== undefined ? search : searchText)) {
       const value = (search !== undefined ? search : searchText).toLowerCase();
       filtered = filtered.filter((order) => {
@@ -113,7 +133,6 @@ const OrdersPage = ({ orders = [], columnWidths = {}, handleResize }) => {
       });
     }
 
-    // Apply date range filter
     const activeDateRange = newDateRange !== undefined ? newDateRange : dateRange;
     if (filtered.length && activeDateRange && activeDateRange[0] && activeDateRange[1]) {
       const startDate = moment(activeDateRange[0]).utcOffset(0, true).startOf("day");
@@ -124,16 +143,27 @@ const OrdersPage = ({ orders = [], columnWidths = {}, handleResize }) => {
       });
     }
 
-    // Apply packing status filter
+    if (
+      filtered.length &&
+      activeDateRange &&
+      activeDateRange[0] &&
+      activeDateRange[1] &&
+      couriers &&
+      couriers.length > 0
+    ) {
+      filtered = filtered.filter((order) =>
+        couriers.includes(order.shipments?.[0]?.courier_name || "N/A")
+      );
+    }
+
     if (filtered.length && packingStatus) {
-      filtered = filtered.filter((order) => 
-        packingStatus === "Completed" 
+      filtered = filtered.filter((order) =>
+        packingStatus === "Completed"
           ? order.packed_status === "Completed"
           : order.packed_status !== "Completed"
       );
     }
 
-    // Apply tab-specific filters
     if (filtered.length) {
       if (tab === "completed") {
         filtered = filtered.filter((order) => order.packed_status === "Completed");
@@ -149,7 +179,6 @@ const OrdersPage = ({ orders = [], columnWidths = {}, handleResize }) => {
       }
     }
 
-    // Apply sorting
     if (filtered.length && sort) {
       filtered.sort((a, b) => {
         if (sort === "packed_asc") {
@@ -181,12 +210,18 @@ const OrdersPage = ({ orders = [], columnWidths = {}, handleResize }) => {
     setDateRange(null);
     setShiprocketStatuses([]);
     setPackingStatusFilter(null);
-    applyFilters({ tab: key, dateRange: null, shiprocketStatuses: [], packingStatus: null });
+    setCourierNamesSelected([]);
+    applyFilters({ tab: key, dateRange: null, shiprocketStatuses: [], packingStatus: null, couriers: [] });
   };
 
   const handleShiprocketStatusChange = (checkedValues) => {
     setShiprocketStatuses(checkedValues);
     applyFilters({ shiprocketStatuses: checkedValues });
+  };
+
+  const handleCourierChange = (checkedValues) => {
+    setCourierNamesSelected(checkedValues);
+    applyFilters({ couriers: checkedValues });
   };
 
   const handlePackingStatusChange = (value) => {
@@ -204,8 +239,9 @@ const OrdersPage = ({ orders = [], columnWidths = {}, handleResize }) => {
     setDateRange(null);
     setShiprocketStatuses([]);
     setPackingStatusFilter(null);
+    setCourierNamesSelected([]);
     setSortOrder(null);
-    applyFilters({ dateRange: null, shiprocketStatuses: [], packingStatus: null, sort: null });
+    applyFilters({ dateRange: null, shiprocketStatuses: [], packingStatus: null, couriers: [], sort: null });
   };
 
   const handleDownloadExcel = () => {
@@ -226,11 +262,11 @@ const OrdersPage = ({ orders = [], columnWidths = {}, handleResize }) => {
     const worksheet = XLSX.utils.json_to_sheet(excelData);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Orders");
-    
+
     const fileName = dateRange && dateRange[0] && dateRange[1]
       ? `Orders_${moment(dateRange[0]).format("YYYYMMDD")}_${moment(dateRange[1]).format("YYYYMMDD")}.xlsx`
       : "Orders.xlsx";
-    
+
     XLSX.writeFile(workbook, fileName);
   };
 
@@ -331,7 +367,7 @@ const OrdersPage = ({ orders = [], columnWidths = {}, handleResize }) => {
           </Tag>
         ),
       },
-   {
+      {
         title: "Warehouse Out",
         key: "warehouse_out_status",
         width: localColumnWidths.warehouse_out_status,
@@ -370,16 +406,14 @@ const OrdersPage = ({ orders = [], columnWidths = {}, handleResize }) => {
       },
     ];
 
-    // For mobile view, show fewer columns
     if (screens.xs) {
-      return baseColumns.filter(col => 
+      return baseColumns.filter(col =>
         ['sno', 'orderID', 'order_status', 'packed_status'].includes(col.key)
       );
     }
 
-    // For tablet view, show more columns but not all details
     if (screens.sm && !screens.md) {
-      return baseColumns.filter(col => 
+      return baseColumns.filter(col =>
         !['customer', 'shipping'].includes(col.key)
       );
     }
@@ -437,9 +471,8 @@ const OrdersPage = ({ orders = [], columnWidths = {}, handleResize }) => {
                         <div><Text type="secondary">ID:</Text> {product.id}</div>
                         <div><Text type="secondary">Weight:</Text> {product.weight ? `${product.weight} kg` : "N/A"}</div>
                         <div><Text type="secondary">Category:</Text> {product.productCategory || "N/A"}</div>
-                          <div><Text type="secondary">Location:</Text> {product.productLocation || "N/A"}</div>
-                          <div><Text type="secondary">updated ID:</Text> {product.updated_id || "N/A"}</div>
-
+                        <div><Text type="secondary">Location:</Text> {product.productLocation || "N/A"}</div>
+                        <div><Text type="secondary">updated ID:</Text> {product.updated_id || "N/A"}</div>
                       </Space>
                     ),
                   },
@@ -480,7 +513,7 @@ const OrdersPage = ({ orders = [], columnWidths = {}, handleResize }) => {
                 </Col>
                 <Col xs={24} sm={12} md={8}>
                   <div><Text strong>Out Date:</Text> {record.warehouse_out_date ? moment(record.warehouse_out_date).format("DD-MM-YYYY") : "N/A"}</div>
-                  <div><Text strong>Out Time:</Text> {record.warehouse_out_time || "N/A"}</div>
+                  <div><Text strong>Out Time:</Text>  {record.warehouse_out_time || "N/A"}</div>
                 </Col>
               </Row>
             </Card>
@@ -515,6 +548,11 @@ const OrdersPage = ({ orders = [], columnWidths = {}, handleResize }) => {
     label: status,
     value: status,
   })) : [];
+
+  const courierOptions = courierNames.map((name) => ({
+    label: name,
+    value: name,
+  }));
 
   const getTabCount = (tabKey) => {
     if (!orders) return 0;
@@ -555,12 +593,17 @@ const OrdersPage = ({ orders = [], columnWidths = {}, handleResize }) => {
               padding: 8px 4px !important;
             }
           }
+          .courier-checkbox-group .ant-checkbox-wrapper {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+          }
         `}
       </style>
 
       <Card
         bordered={false}
-        style={{ marginBottom: 16, borderRadius: 8, borderRight: '3px solid #3c77fa', }}
+        style={{ marginBottom: 16, borderRadius: 8, borderRight: '3px solid #3c77fa' }}
         bodyStyle={{ padding: screens.xs ? '8px' : '12px 16px' }}
       >
         <Tabs
@@ -581,7 +624,7 @@ const OrdersPage = ({ orders = [], columnWidths = {}, handleResize }) => {
                 icon={<ReloadOutlined />}
                 onClick={handleShowAllOrders}
                 size={screens.xs ? "small" : "middle"}
-              >
+                >
                 {screens.xs ? '' : 'Reset'}
               </Button>
             </Space>
@@ -649,120 +692,121 @@ const OrdersPage = ({ orders = [], columnWidths = {}, handleResize }) => {
       </Drawer>
 
       <Card
-  bordered={false}
-  style={{
-    marginBottom: 16,
-    borderRight: '4px solid #3c77fa',   
-    borderRadius: 8,
-    overflow: 'hidden',
-  }}
-  bodyStyle={{
-   
-    padding: screens.xs ? 8 : 16,
-  }}
->
-  <Row gutter={[16, 16]}>
-
-    {/* Search Input */}
-    <Col xs={24} md={8}>
-      <Search
-        placeholder="Search orders..."
-        allowClear
-        enterButton={screens.xs ? false : 'Search'}
-        size={screens.xs ? 'small' : 'large'}
-        onSearch={handleSearch}
-        value={searchText}
-        onChange={(e) => handleSearch(e.target.value)}
-        style={{ width: '100%' }}
-      />
-    </Col>
-
-    {/* Date Range Picker */}
-    <Col xs={24} md={8}>
-      <Calendar
-        value={dateRange}
-        onChange={handleDateChange}
-        selectionMode="range"
-        readOnlyInput
-        dateFormat="dd/mm/yy"
-        placeholder="Date range"
-        showIcon
+        bordered={false}
         style={{
-          width: '100%',
+          marginBottom: 16,
+          borderRight: '4px solid #3c77fa',
+          borderRadius: 8,
+          overflow: 'hidden',
         }}
-        panelStyle={{ fontSize: screens.xs ? '12px' : '14px' }}
-      />
-    </Col>
-
-    {/* Export Button */}
-    <Col xs={24} md={8}>
-    <Select
-        placeholder="Order Status"
-        style={{ width: '100%' }}
-        allowClear
-        size={screens.xs ? 'small' : 'middle'}
+        bodyStyle={{
+          padding: screens.xs ? 8 : 16,
+        }}
       >
-        <Option value="Delivered">Delivered</Option>
-        <Option value="Pending">Pending</Option>
-      </Select>
-    </Col>
+        <Row gutter={[16, 16]}>
+          <Col xs={24} md={8}>
+            <Search
+              placeholder="Search orders..."
+              allowClear
+              enterButton={screens.xs ? false : 'Search'}
+              size={screens.xs ? 'small' : 'large'}
+              onSearch={handleSearch}
+              value={searchText}
+              onChange={(e) => handleSearch(e.target.value)}
+              style={{ width: '100%' }}
+            />
+          </Col>
 
-    {/* Packing Status Filter */}
-    <Col xs={24} md={8}>
-      <Select
-        placeholder="Packing Status"
-        style={{ width: '100%' }}
-        onChange={handlePackingStatusChange}
-        value={packingStatusFilter}
-        allowClear
-        size={screens.xs ? 'small' : 'middle'}
-      >
-        <Option value="Completed">Completed</Option>
-        <Option value="Not Completed">Not Completed</Option>
-      </Select>
-    </Col>
+          <Col xs={24} md={8}>
+            <Calendar
+              value={dateRange}
+              onChange={handleDateChange}
+              selectionMode="range"
+              readOnlyInput
+              dateFormat="dd/mm/yy"
+              placeholder="Date range"
+              showIcon
+              style={{
+                width: '100%',
+              }}
+              panelStyle={{ fontSize: screens.xs ? '12px' : '14px' }}
+            />
+          </Col>
 
-    {/* Sort By */}
-    <Col xs={24} md={8}>
-      <Select
-        placeholder="Sort By"
-        style={{ width: '100%' }}
-        onChange={handleSortChange}
-        value={sortOrder}
-        allowClear
-        size={screens.xs ? 'small' : 'middle'}
-      >
-        <Option value="packed_asc">Packed Status (A-Z)</Option>
-        <Option value="packed_desc">Packed Status (Z-A)</Option>
-      </Select>
-    </Col>
+          <Col xs={24} md={8}>
+            {dateRange && dateRange[0] && dateRange[1] ? (
+              <Checkbox.Group
+                options={courierOptions}
+                value={courierNamesSelected}
+                onChange={handleCourierChange}
+                className="courier-checkbox-group"
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  width: '100%',
+                  maxHeight: '100px',
+                  overflowY: 'auto',
+                  padding: '4px',
+                  border: '1px solid #d9d9d9',
+                  borderRadius: '4px',
+                }}
+              />
+            ) : (
+              <Select
+                placeholder="Select date range to filter couriers"
+                disabled
+                style={{ width: '100%' }}
+                size={screens.xs ? 'small' : 'middle'}
+              />
+            )}
+          </Col>
 
-    {/* Placeholder or Additional Filter (6th Column) */}
-    <Col xs={24} md={8}>
-      {/* Example: Status Filter or Add More Controls */}
-    
+          <Col xs={24} md={8}>
+            <Select
+              placeholder="Packing Status"
+              style={{ width: '100%' }}
+              onChange={handlePackingStatusChange}
+              value={packingStatusFilter}
+              allowClear
+              size={screens.xs ? 'small' : 'middle'}
+            >
+              <Option value="Completed">Completed</Option>
+              <Option value="Not Completed">Not Completed</Option>
+            </Select>
+          </Col>
 
-      <Button
-        type="primary"
-        icon={<DownloadOutlined />}
-        onClick={handleDownloadExcel}
-        disabled={!filteredOrders.length}
-        block
-        size={screens.xs ? 'small' : 'middle'}
-      >
-        Export
-      </Button>
+          <Col xs={24} md={8}>
+            <Select
+              placeholder="Sort By"
+              style={{ width: '100%' }}
+              onChange={handleSortChange}
+              value={sortOrder}
+              allowClear
+              size={screens.xs ? 'small' : 'middle'}
+            >
+              <Option value="packed_asc">Packed Status (A-Z)</Option>
+              <Option value="packed_desc">Packed Status (Z-A)</Option>
+            </Select>
+          </Col>
 
-    </Col>
-    
-  </Row>
-</Card>
-
+          <Col xs={24} md={8}>
+            <Button
+              type="primary"
+              icon={<DownloadOutlined />}
+              onClick={handleDownloadExcel}
+              disabled={!filteredOrders.length}
+              block
+              size={screens.xs ? 'small' : 'middle'}
+            >
+              Export
+            </Button>
+          </Col>
+        </Row>
+      </Card>
 
       <Card
         bordered={false}
-        style={{ borderRadius: 8
-        }}
+        style={{ borderRadius: 8 }}
         bodyStyle={{ padding: 0 }}
       >
         <div style={{ padding: screens.xs ? '8px' : '16px', borderBottom: '1px solid #f0f0f0' }}>
@@ -797,6 +841,6 @@ const OrdersPage = ({ orders = [], columnWidths = {}, handleResize }) => {
       </Card>
     </div>
   );
-};
+}
 
 export default OrdersPage;
