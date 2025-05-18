@@ -123,7 +123,7 @@ const OrderSync = () => {
 
       if (Array.isArray(data.orders) && data.orders.length > 0) {
         const validOrders = data.orders.filter(order => order.status?.toLowerCase() !== "canceled");
-
+console.log(`[${new Date().toISOString()}] Valid orders:`, validOrders);
         if (validOrders.length === 0) {
           setOrders([]);
           setTotalOrders(0);
@@ -151,7 +151,7 @@ const OrderSync = () => {
                 ) || {};
 
                 return {
-                  id: product.id || `TEMP-PROD-${Date.now()}`,
+                  id: product.product_id|| `TEMP-PROD-${Date.now()}`,
                   updated_id: productMapping.updatedID || product.product_id || `TEMP-UPD-${Date.now()}`,
                   sku: product.channel_sku || "Unknown SKU",
                   name: product.name || "Unknown Item",
@@ -361,7 +361,7 @@ const OrderSync = () => {
     const productData = orders.flatMap((order) =>
       order.products.map((product) => ({
         orderID: order.orderID,
-        productID: product.updated_id,
+      productID: product.id, // Now product_id exists
         sku: product.sku,
         productName: product.name,
         quantity: product.quantity,
