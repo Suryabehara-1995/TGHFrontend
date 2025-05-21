@@ -98,7 +98,7 @@ const PackingScreen = ({ userName }) => {
           setPackingStage("ON_HOLD");
         } else if (res.data.order) {
           // Validate shipment statuses
-          const validStatuses = ["PICKUP EXCEPTION", "OUT FOR PICKUP", "PICKUP SCHEDULED"];
+          const validStatuses = ["PICKUP EXCEPTION", "OUT FOR PICKUP", "PICKUP SCHEDULED", "PICKUP ERROR"];
           const shipments = res.data.order.shipments || [];
           const invalidShipment = shipments.find(
             (shipment) => !validStatuses.includes(shipment.status)
